@@ -29,21 +29,21 @@ This project provides emulators for different types of ammeters: Greenlee, ENTES
 
 ## Greenlee Ammeter
 
-- **Port**: 5000
+- **Port**: 5001
 - **Command**: `MEASURE_GREENLEE -get_measurement`
 - **Measurement Logic**: Calculates current using voltage (1V - 10V) and (0.1Ω - 100Ω).
 - **Measurement method** : Ohm's Law: I = V / R
 
 ## ENTES Ammeter
 
-- **Port**: 5001
+- **Port**: 5002
 - **Command**: `MEASURE_ENTES -get_data`
 - **Measurement Logic**: Calculates current using magnetic field strength (0.01T - 0.1T) and calibration factor (500 - 2000).
 - **Measurement method** : Hall Effect: I = B * K
 
 ## CIRCUTOR Ammeter
 
-- **Port**: 5002
+- **Port**: 5003
 - **Command**: `MEASURE_CIRCUTOR -get_measurement`
 - **Measurement Logic**: Calculates current using voltage values (0.1V - 1.0V) over a number of samples and a random time step (0.001s - 0.01s).
 - **Measurement method** : Rogowski Coil Integration: I = ∫V dt

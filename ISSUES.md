@@ -6,7 +6,7 @@ error in the code, please fix it, and explain the fix in the documentation."* Th
 is the catalogue of what is wrong. Each fix, once applied, is explained in
 `IMPLEMENTATION_NOTES.md`.
 
-Last updated: 2026-08-17. **Status: nothing fixed yet — this is the audit.**
+Last updated: 2026-08-17. **Status: ISS-01 and ISS-02 fixed; everything else still open.**
 
 **Severity:** 🔴 Blocker (nothing works until fixed) · 🟠 High (wrong or misleading
 behaviour) · 🟡 Medium (fragile, will bite under load or on another OS) · ⚪ Low (polish)
@@ -19,8 +19,8 @@ behaviour) · 🟡 Medium (fragile, will bite under load or on another OS) · �
 
 | ID | Area | Issue | Severity | Status |
 | --- | --- | --- | --- | --- |
-| [ISS-01](#iss-01) | `main.py` | Commented request commands are missing their flags | 🔴 | ☐ |
-| [ISS-02](#iss-02) | Ports | README ports are shifted by one from the actual ports | 🔴 | ☐ |
+| [ISS-01](#iss-01) | `main.py` | Commented request commands are missing their flags | 🔴 | ☑ |
+| [ISS-02](#iss-02) | Ports | README ports are shifted by one from the actual ports | 🔴 | ☑ |
 | [ISS-03](#iss-03) | `main.py` | Script exits immediately and returns no data | 🔴 | ☐ |
 | [ISS-04](#iss-04) | `client.py` | `request_current_from_ammeter()` returns nothing | 🔴 | ☐ |
 | [ISS-05](#iss-05) | `test_framework.py` | `Dict` used but never imported — module cannot import | 🔴 | ☐ |
@@ -42,6 +42,7 @@ behaviour) · 🟡 Medium (fragile, will bite under load or on another OS) · �
 | [ISS-21](#iss-21) | `requirements.txt` | Five heavy dependencies, only one is imported | 🟡 | ☐ |
 | [ISS-22](#iss-22) | Emulators | Unconditional `print()` on every measurement | ⚪ | ☐ |
 | [ISS-23](#iss-23) | Design | Devices produce non-comparable magnitudes | 🟡 | ☐ |
+| [ISS-24](#iss-24) | `Greenlee_Ammeter.py` | `Ω` in `print()` kills the thread on a non-UTF-8 console | 🔴 | ☐ |
 
 ---
 
@@ -79,6 +80,13 @@ the strings from config rather than hardcoding them a second time (see ISS-08).
 
 *Verify:* each call returns a float instead of the client reporting "No data received."
 
+**☑ Fixed.** The three calls now carry their full command strings and were uncommented —
+a commented-out call cannot be verified, and the issue's own verification criterion
+requires the requests to actually be sent. Sourcing the strings from config is deferred
+with ISS-08; the ports and commands are still hardcoded here, so this is a corrected
+duplicate rather than a single source of truth. The remainder of ISS-03 (the `sleep(5)` /
+`pass` structure and clean shutdown) is untouched and still open.
+
 ---
 
 ### ISS-02
@@ -100,8 +108,10 @@ dangerous failure mode there is.
 
 *Required fix:* pick one source of truth — `config/config.yaml` — and derive both the
 emulator binding and the client target from it, so the three files cannot drift again.
-Recommend adopting the documented **5000 / 5001 / 5002**, since README and `config.yaml`
-already agree and only `main.py` disagrees.
+
+~~Recommend adopting the documented **5000 / 5001 / 5002**, since README and `config.yaml`
+already agree and only `main.py` disagrees.~~ **This recommendation was wrong and has been
+reversed — see the fix note below.**
 
 *Caveat worth documenting:* on macOS, port **5000** is occupied by the AirPlay Receiver
 service by default. Since the spec requires cross-platform compatibility, the port must
@@ -109,6 +119,21 @@ be overridable from config and that override documented in the README.
 
 *Verify:* README, `config.yaml` and the running processes all agree; requesting the
 Greenlee port returns a reading whose printed device name is Greenlee.
+
+**☑ Fixed — by aligning the documentation to the code (5001 / 5002 / 5003), not the
+reverse.** The original recommendation counted files rather than weighing them. Of the
+three, only `main.py` executes: the README is prose and `config.yaml`'s `ammeters:` block
+is entirely commented out (ISS-08), so it parses to `None` and governs nothing. The
+"majority" was two inert documents disagreeing with the one working implementation.
+
+The caveat above then decides it: adopting 5000 would have made Greenlee collide with
+macOS AirPlay Receiver by default, writing a known cross-platform failure into the code on
+purpose. Editing prose also cannot regress behaviour, whereas re-binding ports changes the
+only part of the system currently proven to work and invalidates per-port host firewall
+grants.
+
+Still open: the underlying duplication. Ports remain hardcoded in `main.py` and restated in
+two documents; only ISS-08 removes the possibility of drift.
 
 ---
 
@@ -197,6 +222,40 @@ though the module fails earlier on ISS-05 anyway. The results loop below it prin
 header and no results.
 
 *Required fix:* pass `ammeter_type`, and render the returned result.
+
+---
+
+### ISS-24
+**`Ω` in a `print()` kills the Greenlee thread on a non-UTF-8 console**
+
+*Location:* `Ammeters/Greenlee_Ammeter.py:15`
+
+Found while verifying ISS-01 — not part of the original audit.
+
+```python
+print(f"Greenlee Ammeter - Voltage: {voltage}V, Resistance: {resistance}Ω, Current: {current}A")
+```
+
+`Ω` (U+03A9) cannot be encoded by most Windows ANSI code pages. On this machine
+`sys.stdout.encoding` is `cp1255`, so the first measurement raises
+`UnicodeEncodeError: 'charmap' codec can't encode character 'Ω'`. The exception
+propagates out of `measure_current()` and out of the accept loop, killing the emulator
+thread before `conn.sendall(...)` — so the client reports "No data received." and the
+device is permanently dead for the rest of the process.
+
+This masquerades as a protocol or port fault, which makes it especially expensive to
+diagnose: with ISS-01 fixed, Greenlee was still the one device returning nothing while
+ENTES and CIRCUTOR worked, because those two print only ASCII.
+
+*Workaround for verification only:* `PYTHONIOENCODING=utf-8 python main.py`.
+
+*Required fix:* stop writing non-ASCII to the console — route these through the logger
+with an explicit UTF-8 encoding (ISS-09/ISS-22) and use `Ohm` in console text. Reconfiguring
+`sys.stdout` would hide the class of bug rather than remove it, and a crash in a
+measurement path should not depend on the operator's locale.
+
+*Verify:* `python main.py` returns a Greenlee reading on a `cp1255`/`cp1252` console with
+no environment override.
 
 ---
 
