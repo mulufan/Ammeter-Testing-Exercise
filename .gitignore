@@ -12,3 +12,13 @@ __pycache__/
 
 # ignore pdf and other additional learning files
 *.pdf
+
+# Local assistant / tooling working files - not part of the deliverable
+CLAUDE.md
+.claude/
+.cursor/
+.cursorrules
+.aider*
+.github/copilot-instructions.md
+AGENTS.md
+.mcp.json
