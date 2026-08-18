@@ -228,3 +228,101 @@ scipy / matplotlib / seaborn / pandas pins that nothing imports yet — recorded
 | `scripts/ci_import_check.py` | New. Imports every project module; non-zero exit if any fail. Runnable locally. |
 | `README.md` | New "Development Workflow" section: branch → pull request → CI green → merge → delete branch, plus the local equivalents of the CI checks. |
 | `IMPLEMENTATION_NOTES.md` | This entry. |
+
+*Resolved 2026-08-18 — the README was corrected to match the emulator.*
+
+---
+
+## 2026-08-18 — Unified measurement API
+
+Branch: `feature/unified-measurement-api`. One entry point for all three devices, driven by
+the config registry, returning one result type and raising on failure. Sampling, statistics,
+storage and logging are out of scope.
+
+Closes ISS-04, ISS-07, ISS-08 and ISS-12, plus the import half of ISS-05 and ISS-19.
+
+### Fixes
+
+- **ISS-08** — `ammeters:` uncommented and populated. `config.yaml` is now the registry that
+  `get_measurement()` reads port and command from, so adding a device is a YAML edit. `main.py`
+  still hardcodes the ports it *binds*, so the server half of the duplication remains (ISS-18).
+- **ISS-04 / ISS-12** — the client returns `float` instead of printing and returning `None`;
+  applies `settimeout(5.0)` before `connect()`, covering both connect and recv; and raises
+  `AmmeterConnectionError` (unreachable or timed out) or `AmmeterResponseError` (empty,
+  non-UTF-8, or non-numeric reply) instead of hanging or surfacing a bare `OSError`.
+- **ISS-05 / ISS-19** — `Dict` imported; the relative `..utils.config` import made absolute to
+  match the rest of the file; `__init__.py` added to all four package directories. Adding only
+  some is worse than none — a regular package containing a namespace subpackage resolves on
+  some interpreters and not others.
+- **ISS-07** — README CIRCUTOR command corrected to `-get_measurement -current`. The emulator
+  is the source of truth; the README was wrong.
+
+### Decisions
+
+- **`Measurement` dataclass, not a `Dict`.** Typed fields catch a mistyped key at the point of
+  the mistake rather than as a `None` several stages later, and `dataclasses.asdict()` covers
+  the storage stage. Frozen, because a sample records something that already happened.
+- **Timestamp is a timezone-aware UTC `datetime`.** Comparable without parsing, so the sampling
+  engine can measure actual versus requested intervals; formatting belongs at the storage
+  boundary. Naive local times break comparison across machines and across a DST change.
+- **No `ok` / `error` fields — failures raise.** A result type that can mean "no measurement"
+  pushes the check onto every consumer, and the one that forgets feeds `None` into
+  `statistics.mean()`. The cost lands in the sampling stage: a fault-tolerant run must catch
+  `AmmeterError` per sample and keep its own tally of failures.
+- **Two exception types, not three.** "Unreachable" and "bad reply" call for different caller
+  behaviour; empty versus malformed does not.
+- **`AmmeterError` derives from `RuntimeError` deliberately.** Response errors are raised
+  inside the same `try` that guards the socket, so a base of `OSError` or `ValueError` would
+  see them caught by that handler and relabelled as connection failures. Do not change this
+  base class without re-reading this line.
+
+### Dependencies
+
+None added. `dataclasses`, `datetime`, `socket` and `typing` are all standard library.
+
+### Verification
+
+`python main.py` — one `Measurement` per device (emulator debug prints omitted):
+
+```
+Measurement(ammeter_type='greenlee', current=0.1452933538316761, unit='A', timestamp=datetime.datetime(2026, 8, 18, 11, 40, 49, 148726, tzinfo=datetime.timezone.utc))
+Measurement(ammeter_type='entes',    current=11.536727984656562,  unit='A', timestamp=...164440, tzinfo=datetime.timezone.utc))
+Measurement(ammeter_type='circutor', current=0.04114656601847207, unit='A', timestamp=...181479, tzinfo=datetime.timezone.utc))
+```
+
+Error paths, via an ad-hoc probe (not committed) running a real emulator alongside two
+stand-in servers replying with deliberate junk:
+
+```
+[dead port]                    AmmeterConnectionError: ... on port 5999: timed out
+[wrong command (empty reply)]  AmmeterResponseError:   No response received from ammeter on port 5001
+[non-numeric reply]            AmmeterResponseError:   Invalid response received from ammeter on port 5901
+[non-utf8 reply]               AmmeterResponseError:   Invalid response received from ammeter on port 5902
+```
+
+The dead-port case reports `timed out` because Windows drops a connect to a closed loopback
+port rather than refusing it; Linux reports `Connection refused`. Both classify correctly.
+
+**ISS-24 is not fixed** — it merely did not trigger, because `sys.stdout.encoding` was `utf-8`
+in the shell used here.
+
+### Files touched
+
+| File | Change |
+| --- | --- |
+| `Ammeters/client.py` | Returns `float`; timeout; exception hierarchy; prints removed (ISS-04, ISS-12). |
+| `src/testing/measurement.py` | **New.** Frozen `Measurement` dataclass with UTC timestamp. |
+| `src/testing/test_framework.py` | `get_measurement()` resolves port/command from config and returns a `Measurement`; imports fixed (ISS-05). |
+| `config/config.yaml` | `ammeters:` block uncommented and populated (ISS-08). |
+| `README.md` | CIRCUTOR command corrected (ISS-07). |
+| `Ammeters/`, `src/`, `src/testing/`, `src/utils/` — `__init__.py` | **New**, empty (ISS-19, partial). |
+| `main.py` | Calls the framework per device and prints the result. |
+
+### Still open
+
+- `config_path` is still CWD-relative and the config is unvalidated — deferred to ISS-15 so the
+  path fix and the missing-file/schema handling land together rather than half in two places.
+- `main.py` keeps the supplied `sleep(5)` and trailing `pass`; removing them needs ISS-10 and a
+  readiness signal (ISS-18), not just deletion.
+- `AmmeterResponseError` names the port but not the offending payload — recoverable from the
+  chained traceback, absent from the log line an operator actually reads.
