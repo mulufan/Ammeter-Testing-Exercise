@@ -52,3 +52,33 @@ To start the ammeter emulators and request current measurements, run the `main.p
 ```sh
 python main.py
 ```
+
+## Development Workflow
+
+`master` is protected by convention: nothing is committed to it directly. All work
+follows the same path.
+
+1. **Branch** off `master` — `feature/<desc>`, `fix/<desc>`, `chore/<desc>`,
+   `refactor/<desc>` or `test/<desc>` (lowercase with hyphens).
+2. **Commit and push** the branch.
+3. **Open a pull request** targeting `master`.
+4. **CI must pass.** [`.github/workflows/ci.yml`](.github/workflows/ci.yml) runs on every
+   pull request against `master`: it sets up Python, installs `requirements.txt`,
+   byte-compiles every source file, and imports every module.
+5. **Merge to `master`** once CI is green and the change has been reviewed.
+6. **Delete the branch** in both places — remote and local (`git branch -d <branch>`).
+
+### Running the CI checks locally
+
+The same two checks CI runs, before you push:
+
+```sh
+python -m compileall -q main.py Ammeters src examples scripts
+python scripts/ci_import_check.py
+```
+
+The import check is currently reported but not enforced — `master` still contains a known
+import failure (`src/testing/test_framework.py`, ISS-05 in [`ISSUES.md`](ISSUES.md)). Once
+that fix lands on `master`, drop `continue-on-error` from the workflow so the step blocks
+merges. Tests are not part of CI yet; when `pytest` arrives it is added as one more step
+after the import check.
