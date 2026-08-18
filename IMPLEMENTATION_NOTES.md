@@ -139,3 +139,92 @@ without `-current`. Both were wrong relative to the emulator; the config comment
 corrected in passing and the README deliberately was not, so the two now disagree. This
 is ISS-07's territory and is parked there pending a decision on whether `-current` is a
 documentation error or a flag intended to be implemented differently.
+
+---
+
+## 2026-08-18 — Add GitHub Actions CI for pull requests
+
+Branch: `chore/github-actions-ci`, cut from `master` (not from the in-flight
+`feature/unified-measurement-api`, so the pull request carries only CI changes). No
+issue from `ISSUES.md` is fixed here; this stage adds infrastructure only.
+
+### What CI does
+
+`.github/workflows/ci.yml` runs on `pull_request` against `master` and on
+`workflow_dispatch`. One job, `build`, on `ubuntu-latest` with Python 3.11 supplied
+through a one-entry matrix: development is on Windows, so running CI on Linux exercises
+the spec's cross-platform constraint rather than re-testing the dev machine. The matrix
+is a single entry today purely so adding versions later is a one-line change.
+
+Steps: checkout → `setup-python` (with pip caching keyed on `requirements.txt`) →
+`pip install -r requirements.txt` → byte-compile → import check.
+
+### Two levels of verification, deliberately
+
+`python -m compileall` only proves the sources *parse*. That would not have caught ISS-05
+(`Dict` used in `test_framework.py` but never imported), because the `NameError` fires when
+the annotation is evaluated at import time, not at compile time. So there is a second step,
+`scripts/ci_import_check.py`, which imports every module under `Ammeters/`, `src/` and
+`examples/` plus top-level `main.py`. Importing is safe: every entry point in the repo
+guards its work behind `if __name__ == "__main__":`, so no socket is bound during the check.
+
+The script lives in the repo rather than inline in the YAML so it can be run locally
+before pushing, with identical behaviour to CI.
+
+### Why the import check is currently non-blocking
+
+Run against `master` as it stands today:
+
+```
+OK   main
+OK   Ammeters.base_ammeter
+OK   Ammeters.Circutor_Ammeter
+OK   Ammeters.client
+OK   Ammeters.Entes_Ammeter
+OK   Ammeters.Greenlee_Ammeter
+FAIL src.testing.test_framework     NameError: name 'Dict' is not defined
+OK   src.utils.config
+OK   src.utils.logger
+OK   src.utils.Utils
+FAIL examples.run_tests             (same NameError, via its import)
+
+2 module(s) failed to import.
+```
+
+Both failures are ISS-05 — `examples/run_tests.py` fails only because it imports the
+broken module. This is a genuine pre-existing bug, already fixed on
+`feature/unified-measurement-api` but not yet on `master`. A pull request's checks run
+against the merge of the branch and its base, so a blocking import step would make this
+very pull request red for a defect it does not introduce, and block its own merge.
+
+The step therefore carries `continue-on-error: true`: the failure is visible in the log
+on every pull request, but it does not gate. **When ISS-05's fix reaches `master`, delete
+that one line** and the import check becomes a hard gate. `compileall` is blocking from
+the start, since it passes on `master` today.
+
+Rejected alternatives: (a) enumerating only the modules that currently import cleanly —
+this hides the defect and silently under-tests as files are added; (b) fixing ISS-05 in
+this branch — out of scope for a CI stage, and it would collide with the fix already
+committed on the feature branch.
+
+### No fake tests
+
+The task explicitly excludes placeholder tests, and none were added — there is no test
+suite yet, and a green `pytest` run over zero tests would assert nothing. The workflow
+ends with a comment marking exactly where the `pytest` step goes when Stage 5+ produces
+real tests.
+
+### Dependencies
+
+None added. `requirements.txt` is unchanged; CI installs it as-is (including the numpy /
+scipy / matplotlib / seaborn / pandas pins that nothing imports yet — recorded in
+`ISSUES.md`, not touched here). `pytest` gets added when tests do.
+
+### Files touched
+
+| File | Change |
+| --- | --- |
+| `.github/workflows/ci.yml` | New. Pull-request CI: setup Python, install deps, compile, import check. |
+| `scripts/ci_import_check.py` | New. Imports every project module; non-zero exit if any fail. Runnable locally. |
+| `README.md` | New "Development Workflow" section: branch → pull request → CI green → merge → delete branch, plus the local equivalents of the CI checks. |
+| `IMPLEMENTATION_NOTES.md` | This entry. |
