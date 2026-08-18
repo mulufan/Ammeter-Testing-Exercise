@@ -1,0 +1,54 @@
+name: CI
+
+# Runs on every pull request that targets master, and on demand from the Actions tab.
+# master itself is only written to through pull requests, so this is the gate.
+on:
+  pull_request:
+    branches:
+      - master
+  workflow_dispatch:
+
+jobs:
+  build:
+    name: Build (Python ${{ matrix.python-version }})
+    runs-on: ubuntu-latest
+
+    strategy:
+      fail-fast: false
+      matrix:
+        # Development happens on Windows; CI runs Linux to keep the cross-platform
+        # constraint honest. Add more versions here as support widens.
+        python-version: ["3.11"]
+
+    steps:
+      - name: Check out the repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python ${{ matrix.python-version }}
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+          cache: pip
+          cache-dependency-path: requirements.txt
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: Byte-compile all sources
+        # Hard gate: every source file must parse.
+        run: python -m compileall -q main.py Ammeters src examples scripts
+
+      - name: Import check
+        # Softer gate: imports also execute module level code. master currently has a
+        # known import failure (src/testing/test_framework.py, ISS-05 in ISSUES.md), so this
+        # step reports without failing the build. Remove continue-on-error once that
+        # fix has landed on master, making the import check blocking.
+        continue-on-error: true
+        run: python scripts/ci_import_check.py
+
+      # Next step for this workflow: once tests exist, add
+      #   - name: Run tests
+      #     run: pytest
+      # after the import check (and add pytest to requirements.txt).
