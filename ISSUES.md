@@ -6,12 +6,13 @@ error in the code, please fix it, and explain the fix in the documentation."* Th
 is the catalogue of what is wrong. Each fix, once applied, is explained in
 `IMPLEMENTATION_NOTES.md`.
 
-Last updated: 2026-08-17. **Status: ISS-01 and ISS-02 fixed; everything else still open.**
+Last updated: 2026-08-18. **Status: ISS-01, ISS-02, ISS-04, ISS-05, ISS-07, ISS-08 and
+ISS-12 fixed. ISS-19 partially addressed. Everything else still open.**
 
 **Severity:** 🔴 Blocker (nothing works until fixed) · 🟠 High (wrong or misleading
 behaviour) · 🟡 Medium (fragile, will bite under load or on another OS) · ⚪ Low (polish)
 
-**Status:** ☐ open · ☑ fixed
+**Status:** ☐ open · ◐ partially fixed · ☑ fixed
 
 ---
 
@@ -22,22 +23,22 @@ behaviour) · 🟡 Medium (fragile, will bite under load or on another OS) · �
 | [ISS-01](#iss-01) | `main.py` | Commented request commands are missing their flags | 🔴 | ☑ |
 | [ISS-02](#iss-02) | Ports | README ports are shifted by one from the actual ports | 🔴 | ☑ |
 | [ISS-03](#iss-03) | `main.py` | Script exits immediately and returns no data | 🔴 | ☐ |
-| [ISS-04](#iss-04) | `client.py` | `request_current_from_ammeter()` returns nothing | 🔴 | ☐ |
-| [ISS-05](#iss-05) | `test_framework.py` | `Dict` used but never imported — module cannot import | 🔴 | ☐ |
+| [ISS-04](#iss-04) | `client.py` | `request_current_from_ammeter()` returns nothing | 🔴 | ☑ |
+| [ISS-05](#iss-05) | `test_framework.py` | `Dict` used but never imported — module cannot import | 🔴 | ☑ |
 | [ISS-06](#iss-06) | `run_tests.py` | `run_test()` called with no argument | 🔴 | ☐ |
-| [ISS-07](#iss-07) | README | CIRCUTOR command documented without `-current` | 🟠 | ☐ |
-| [ISS-08](#iss-08) | `config.yaml` | Entire `ammeters:` block commented out | 🟠 | ☐ |
+| [ISS-07](#iss-07) | README | CIRCUTOR command documented without `-current` | 🟠 | ☑ |
+| [ISS-08](#iss-08) | `config.yaml` | Entire `ammeters:` block commented out | 🟠 | ☑ |
 | [ISS-09](#iss-09) | `logger.py` | Logger never attaches a handler — nothing is logged | 🟠 | ☐ |
 | [ISS-10](#iss-10) | `base_ammeter.py` | No `SO_REUSEADDR` — restart fails with "address in use" | 🟠 | ☐ |
 | [ISS-11](#iss-11) | `base_ammeter.py` | Unknown commands dropped silently, client hangs | 🟠 | ☐ |
-| [ISS-12](#iss-12) | `client.py` | No socket timeout and no error handling | 🟠 | ☐ |
+| [ISS-12](#iss-12) | `client.py` | No socket timeout and no error handling | 🟠 | ☑ |
 | [ISS-13](#iss-13) | `config.yaml` | All sampling parameters are `NULL` | 🟠 | ☐ |
 | [ISS-14](#iss-14) | README | Documented file paths and names do not exist | 🟡 | ☐ |
 | [ISS-15](#iss-15) | `config.py` | File opened without explicit encoding | 🟡 | ☐ |
 | [ISS-16](#iss-16) | `base_ammeter.py` | Global RNG reseeded per instance; correlated sequences | 🟡 | ☐ |
 | [ISS-17](#iss-17) | `base_ammeter.py` | Exact byte compare on a single `recv()` | 🟡 | ☐ |
 | [ISS-18](#iss-18) | `base_ammeter.py` | Servers cannot be stopped; one client at a time | 🟡 | ☐ |
-| [ISS-19](#iss-19) | Packaging | No `__init__.py`; imports depend on the working directory | 🟡 | ☐ |
+| [ISS-19](#iss-19) | Packaging | No `__init__.py`; imports depend on the working directory | 🟡 | ◐ |
 | [ISS-20](#iss-20) | Protocol | Reply has no framing or delimiter | 🟡 | ☐ |
 | [ISS-21](#iss-21) | `requirements.txt` | Five heavy dependencies, only one is imported | 🟡 | ☐ |
 | [ISS-22](#iss-22) | Emulators | Unconditional `print()` on every measurement | ⚪ | ☐ |
@@ -153,6 +154,13 @@ and print the result; keep the process alive while doing so.
 
 *Verify:* `python main.py` prints one current reading per ammeter and exits cleanly.
 
+*Progress (2026-08-18):* the verification criterion now passes — `main.py` calls
+`AmmeterTestFramework.get_measurement()` for each device and prints three `Measurement`s.
+Left open deliberately, because the structural half is untouched: the fixed `time.sleep(5)`
+and the trailing `pass` are still there. The sleep is a workaround for ISS-10
+(`SO_REUSEADDR`) and the absence of a readiness signal (ISS-18); deleting it without those
+replaces a slow start with a race.
+
 ---
 
 ### ISS-04
@@ -177,10 +185,17 @@ into a `float` and never handed back, so the function cannot be used as a measur
 — which is exactly what the whole framework needs to be built on.
 
 *Required fix:* parse the reply to `float` and return it (inside a result object carrying
-device, timestamp and success state, per Milestone 2). Printing becomes the caller's
+device, timestamp and success state, per Milestone 1). Printing becomes the caller's
 choice, not a side effect.
 
 *Verify:* `value = request_current_from_ammeter(...)` yields a usable number.
+
+**☑ Fixed.** The function parses the reply and returns `float`; the prints were removed
+rather than made conditional, since at sampling frequencies they would flood stdout and the
+I/O itself perturbs the timing the framework exists to measure. The result object called for
+above is `src/testing/measurement.py`'s frozen `Measurement` (device, current, unit, UTC
+timestamp), built one layer up in `AmmeterTestFramework.get_measurement()` so the client
+stays a thin transport. It carries no success flag — failures raise instead (ISS-12).
 
 ---
 
@@ -205,6 +220,13 @@ imported at all, which also breaks `examples/run_tests.py`.
 that only resolves when imported as part of the package from the repo root — running the
 file directly fails with "attempted relative import with no known parent package".
 `run_test()` itself is an empty `pass`.
+
+**☑ Fixed.** `from typing import Dict` added, and the relative import changed to the
+absolute `from src.utils.config import load_config` — the file had been mixing both styles,
+so it could only ever be imported one way.
+
+Still open from the *Related* note: `run_test()` remains an empty `pass`. It is the sampling
+entry point and belongs with that stage, not with the import fix.
 
 ---
 
@@ -273,6 +295,11 @@ client written from the documentation is silently ignored.
 *Required fix:* correct the README to match the code (or change both together, once
 commands come from config).
 
+**☑ Fixed.** `README.md:47` now documents `MEASURE_CIRCUTOR -get_measurement -current`,
+matching `Circutor_Ammeter.py:9` and the config entry added under ISS-08. The emulator was
+taken as the source of truth: it is the only one of the three that executes, and the flag
+is what it actually compares against.
+
 ---
 
 ### ISS-08
@@ -286,6 +313,16 @@ commands are duplicated (and contradicted) across `main.py` and the README.
 
 *Required fix:* uncomment and populate, making this the single source of truth for
 device name, port and command.
+
+**☑ Fixed for the client side.** The block is uncommented and carries all three devices with
+their `port` and `command`. `AmmeterTestFramework.get_measurement(ammeter_type)` resolves
+both from it, so callers name a device instead of restating a port and a byte string, and
+adding a fourth ammeter is a YAML edit rather than a code change.
+
+**Not yet the single source of truth.** `main.py` still hardcodes the ports it *binds* when
+constructing the emulators, so the server half of the duplication survives — config and code
+can still drift, just in one place instead of three. Closing that means having the emulators
+read the same registry, which lands with the lifecycle work in ISS-18.
 
 ---
 
@@ -359,7 +396,31 @@ handling for `ConnectionRefusedError` (server not up yet) or `OSError` (wrong po
 no retry. During a sampling run, one unreachable device would stall the entire test.
 
 *Required fix:* set an explicit timeout, catch connection errors, and surface them as a
-failed-sample result so the run continues (Milestone 3).
+failed-sample result so the run continues (Milestone 2).
+
+**☑ Fixed.** `DEFAULT_TIMEOUT_SECONDS = 5.0` is applied via `settimeout()` before
+`connect()`, so it covers the connect and the recv; it is a keyword argument, so a run can
+lower it without touching the client. Failures now raise typed errors:
+
+| Failure | Raised |
+| --- | --- |
+| Connect/socket failure, or timeout | `AmmeterConnectionError` |
+| Reply empty, non-UTF-8, or non-numeric | `AmmeterResponseError` |
+
+Two types rather than three: "unreachable" and "bad reply" call for different caller
+behaviour, empty versus malformed does not.
+
+**Note for anyone editing `client.py`:** `AmmeterError` derives from `RuntimeError` on
+purpose. The response errors are raised *inside* the same `try` that guards the socket work,
+so a base class of `OSError` or `ValueError` would have them caught by that handler and
+silently relabelled as connection failures.
+
+**Deviation from the required fix, deliberate.** Failures raise rather than returning a
+failed-sample result. A result type that can also mean "no measurement" pushes the check onto
+every consumer, and the one that forgets feeds `None` into `statistics.mean()` and fails far
+from the cause. Run-level fault tolerance is still available and still Milestone 2's job: the
+sampling loop catches `AmmeterError` per sample and keeps its own tally, which keeps the
+"continue the run" behaviour without weakening the result type.
 
 ---
 
@@ -401,7 +462,7 @@ config and in the README.
 The "Usage" heading is also empty and immediately followed by a duplicate
 `# Ammeter Emulators` title.
 
-*Required fix:* rewrite the structure section to match reality (Milestone 7).
+*Required fix:* rewrite the structure section to match reality (Milestone 6).
 
 ---
 
@@ -417,6 +478,13 @@ empty file silently yields `None`.
 
 *Required fix:* `open(config_path, 'r', encoding='utf-8')`, plus validation and a clear
 error when the file is missing or malformed.
+
+*Scope note (2026-08-18):* this issue also now owns resolving `AmmeterTestFramework`'s
+`config_path` against the project root instead of the CWD, deferred here from ISS-19 so the
+path, the missing-file error and the schema check land as one change. Validation should cover
+a missing or `None` `ammeters:` section — `get_measurement` currently assumes it is a dict,
+and an empty one raises `TypeError: argument of type 'NoneType' is not iterable`, which
+points nowhere near the actual problem.
 
 ---
 
@@ -464,7 +532,7 @@ only exit because the threads are daemons. The accept loop also handles one conn
 a time, so concurrent sampling of a device queues.
 
 *Required fix:* add a stop event and clean shutdown so the framework can manage emulator
-lifecycle (Milestone 2).
+lifecycle (Milestone 1).
 
 *Also:* `bind(('localhost', ...))` can resolve to IPv6 `::1` on some systems while the
 client resolves to IPv4 — bind explicitly to `127.0.0.1`.
@@ -483,6 +551,18 @@ likewise relative to the working directory.
 
 *Required fix:* add `__init__.py` files and resolve the config path relative to the
 project root rather than the CWD.
+
+**◐ Partially fixed.** `__init__.py` was added to all four directories — `Ammeters/`, `src/`,
+`src/testing/` and `src/utils/` — so they are regular packages. All four, not just the ones
+currently imported: a regular package containing a namespace subpackage resolves on some
+interpreters and layouts and not others, so a half-applied fix is worse than none.
+
+**Still open:** `AmmeterTestFramework`'s default `config_path="config/config.yaml"` is
+unchanged and remains relative to the working directory, so the framework still only works
+when launched from the repo root. Resolving it against `__file__` was proposed and deferred
+to ISS-15, so the path fix arrives together with the missing-file handling and schema
+validation rather than leaving half a fix in two files. `python examples/run_tests.py` also
+still fails on `sys.path` (ISS-06).
 
 ---
 
@@ -532,7 +612,7 @@ CIRCUTOR's `sum(v * time_step)` is also a left-Riemann sum whose magnitude scale
 the randomly chosen `time_step`, injecting variance unrelated to the quantity supposedly
 being measured.
 
-*Not strictly a bug* — but it constrains the design of Milestone 6 and must be handled
+*Not strictly a bug* — but it constrains the design of Milestone 5 and must be handled
 explicitly rather than papered over.
 
 ---

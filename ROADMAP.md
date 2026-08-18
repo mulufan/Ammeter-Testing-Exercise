@@ -1,128 +1,103 @@
 # Roadmap
 
-A living document. Check off items as they ship. Add new items under the relevant
-milestone or create a new one. Last updated: 2026-08-17.
+A living document. Check items off as they ship. Last updated: 2026-08-18.
 
-Observability is not a separate phase — every milestone carries its own metrics work,
-marked **Observability:**. Runs are short-lived batch jobs, so each completed run pushes
-its metrics to a Prometheus **Pushgateway**; Prometheus scrapes the gateway and Grafana
-reads from Prometheus. The whole stack comes up from a committed `docker-compose.yml`.
-The stack is optional at runtime: the framework must always produce results with it down.
+Milestones 1–5 are the five sections of the assignment's Problem Statement, in its order and
+under its names. Milestone 0 (fixing the supplied code) and Milestone 6 (documentation) are
+not in the Problem Statement but are required by the assignment's Technical Requirements and
+Deliverables. Individual bugs are tracked by ID in [`ISSUES.md`](ISSUES.md); fixes and design
+decisions are recorded in [`IMPLEMENTATION_NOTES.md`](IMPLEMENTATION_NOTES.md).
+
+**Observability** is not a phase of its own — each milestone carries one line of metrics work.
+Runs are short-lived batch jobs, so a completed run pushes metrics to a Prometheus
+**Pushgateway**; Prometheus scrapes it and Grafana reads from Prometheus, with the whole stack
+coming up from a committed `docker-compose.yml`. It stays optional at runtime: the framework
+must always produce results with the stack down.
+
+**Status:** ⬜ not started · 🟡 in progress · ✅ done
 
 ---
 
-## 🟡 Milestone 1 — Bootstrap & Existing Bugs Fixed
+## 🟡 Milestone 0 — Supplied code fixed
 
-- [x] Repository audited — every supplied source file read and its current responsibility documented
-- [x] All bugs, mismatches and unimplemented pieces in the supplied code catalogued
-- [ ] Port assignments reconciled across `main.py`, `config/config.yaml` and `README.md` (one source of truth)
-- [ ] Command strings sent by clients match what each emulator expects (`-get_measurement`, `-get_data`, `-get_measurement -current`)
-- [ ] `README.md` CIRCUTOR command corrected to `MEASURE_CIRCUTOR -get_measurement -current`
-- [ ] `request_current_from_ammeter()` returns the parsed reading instead of only printing it
-- [ ] Client parses the socket reply into a `float` and validates it
-- [ ] Client handles connection refusal and timeout without hanging or raising an unhandled exception
-- [ ] Emulator sockets set `SO_REUSEADDR` so servers restart cleanly between runs
-- [ ] Emulators reply with an explicit error instead of silently dropping an unrecognised command
-- [ ] `src/testing/test_framework.py` imports cleanly (missing `Dict` import fixed)
-- [ ] `examples/run_tests.py` calls `run_test()` with its required argument
-- [ ] `src/utils/logger.py` actually writes to `results/logs/` (handler, formatter and level attached)
-- [ ] `load_config()` opens files with an explicit UTF-8 encoding
-- [ ] `python main.py` runs end to end and prints a real current reading from all three ammeters
-- [ ] `IMPLEMENTATION_NOTES.md` created and recording each fix as it lands
-- [ ] **Observability:** `docker-compose.yml` at the repo root brings up Prometheus, Pushgateway and Grafana with a single command
-- [ ] **Observability:** `prometheus.yml` scrape config committed; Prometheus confirmed scraping the Pushgateway target as UP
-- [ ] **Observability:** Grafana auto-provisions Prometheus as a datasource on startup — no manual clicking in the UI
-- [ ] **Observability:** `prometheus_client` added to `requirements.txt`, with the added dependency justified in `IMPLEMENTATION_NOTES.md` against the spec's "minimize dependencies" constraint
+*Goal: `python main.py` runs end to end and returns real data from all three ammeters.*
 
-## ⬜ Milestone 2 — Unified Measurement API
+- [x] Repository audited and every bug catalogued (`ISSUES.md`)
+- [x] Ports and commands reconciled across `main.py`, `config.yaml` and `README.md` — ISS-01, ISS-02, ISS-07
+- [x] Client returns a parsed `float`, with a socket timeout and typed errors — ISS-04, ISS-12
+- [x] `test_framework.py` imports cleanly; all four directories are packages — ISS-05, ISS-19 (partial)
+- [x] `python main.py` prints a real reading from all three ammeters
+- [ ] Emulators: `SO_REUSEADDR`, explicit reply to unknown commands, clean shutdown — ISS-10, ISS-11, ISS-18
+- [ ] Config loading: UTF-8, validation, path resolved from the project root — ISS-15, ISS-19
+- [ ] Logger actually writes to `results/logs/` — ISS-09
+- [ ] `examples/run_tests.py` runs — ISS-06
+- [ ] Emulator print flood removed, including the `Ω` crash on non-UTF-8 consoles — ISS-22, ISS-24
+- [ ] **Observability:** `docker-compose.yml`, scrape config and auto-provisioned Grafana datasource committed and verified up
 
-- [ ] One client abstraction exposes a single measurement call that works for Greenlee, ENTES and CIRCUTOR
-- [ ] All three devices return the same result type (value, unit, timestamp, device id, success flag)
-- [ ] Failures surface as one consistent error type regardless of which device produced them
-- [ ] Ammeter definitions (name, port, command) are read from `config/config.yaml` — nothing hardcoded
-- [ ] The `ammeters:` block in `config.yaml` is uncommented and fully populated
-- [ ] Adding a fourth ammeter needs only a config entry plus an emulator class — no framework edits
-- [ ] Emulator start/stop is controllable from the framework, not only from `main.py`
-- [ ] A device that is unreachable is reported clearly instead of stalling the caller
-- [ ] **Observability:** a single shared metrics registry sits behind the unified client, so all three devices are instrumented identically by construction
-- [ ] **Observability:** every measurement call increments a counter labelled by ammeter type
-- [ ] **Observability:** connection, timeout and parse failures increment a labelled error counter distinguishable by failure kind
-- [ ] **Observability:** per-call latency recorded as a histogram, labelled by ammeter type
+## 🟡 Milestone 1 — Unified Measurement API
 
-## ⬜ Milestone 3 — Measurement Sampling
+*Goal: one testing interface that works with multiple ammeter types and reports results
+consistently.*
 
-- [ ] Sampling by an explicit number of measurements
-- [ ] Sampling bounded by a total test duration
-- [ ] Sampling at a configured frequency (Hz)
-- [ ] Precedence rule defined and documented for when count / duration / frequency are combined
-- [ ] Timing uses a monotonic clock and does not accumulate drift over a long run
-- [ ] Achieved sampling rate reported alongside the requested rate for every run
-- [ ] A failed or dropped sample is recorded and the run continues rather than aborting
-- [ ] Sampling parameters are read from `config.yaml` with no `NULL` placeholders left
-- [ ] **Observability:** requested vs achieved sampling rate pushed as gauges at the end of each run
-- [ ] **Observability:** per-run sample success and failure counts pushed to the gateway
-- [ ] **Observability:** total run duration pushed as a gauge
-- [ ] **Observability:** timing drift (scheduled vs actual sample instant) exported so the precision claim is evidenced, not asserted
+- [x] A single call measures Greenlee, ENTES and CIRCUTOR
+- [x] All three return the same result type — `Measurement` (device, current, unit, UTC timestamp)
+- [x] Failures surface as one error family regardless of device — `AmmeterError`
+- [x] Device name, port and command come from `config.yaml`; a fourth ammeter is a config entry plus an emulator class
+- [ ] Emulator start/stop controllable from the framework, not only from `main.py`
+- [ ] **Observability:** one shared registry behind the client, so every device is instrumented identically — call counter, error counter by failure kind, and latency histogram, all labelled by ammeter type
 
-## ⬜ Milestone 4 — Result Analysis
+## ⬜ Milestone 2 — Measurement Sampling
 
-- [ ] Mean current computed per run
-- [ ] Median current computed per run
-- [ ] Standard deviation computed per run
-- [ ] Minimum and maximum computed per run
-- [ ] Sample count and failure count reported next to the statistics
-- [ ] Consistency / variability metric reported (e.g. coefficient of variation)
-- [ ] Statistics computed with the standard library unless an added dependency is justified in writing
+*Goal: configurable sampling with precise timing and data collection.*
+
+- [ ] A run is driven by number of measurements, by total duration, or by sampling frequency
+- [ ] Precedence rule defined and documented for when they are combined
+- [ ] Monotonic, drift-free timing; achieved rate reported next to the requested rate
+- [ ] A failed sample is tallied and the run continues rather than aborting
+- [ ] Sampling parameters read from `config.yaml` with real defaults, no `NULL` placeholders — ISS-13
+- [ ] **Observability:** requested vs achieved rate, per-run success/failure counts, run duration and timing drift pushed at the end of each run
+
+## ⬜ Milestone 3 — Result Analysis
+
+*Goal: comprehensive statistics over a run.*
+
+- [ ] Mean, median, standard deviation, minimum and maximum current per run
+- [ ] Sample count and failure count reported alongside the statistics
+- [ ] Computed with the standard library `statistics` module unless an added dependency is justified
 - [ ] Run summary printed in a clear, readable format
-- [ ] (Bonus) Measurement series plotted over time with matplotlib and saved alongside the run
-- [ ] (Bonus) Per-ammeter distribution / histogram plot saved alongside the run
-- [ ] **Observability:** mean, median, standard deviation, min and max pushed as labelled gauges for every run
-- [ ] **Observability:** a Grafana dashboard panel for each statistic, committed as provisioned JSON rather than hand-built in the UI
-- [ ] **Observability:** dashboard verified to render correctly for a run of each of the three ammeter types
-- [ ] **Observability:** static matplotlib plots remain the committed sample-results artefact — Grafana complements them, it does not replace them
+- [ ] *(Bonus)* Measurement series over time and per-device distribution plots saved with the run
+- [ ] *(Bonus)* Performance consistency evaluated with a named variability metric
+- [ ] **Observability:** the five statistics pushed as labelled gauges, with a provisioned Grafana dashboard panel for each
 
-## ⬜ Milestone 5 — Result Management
+## ⬜ Milestone 4 — Result Management
 
-- [ ] Every test run is assigned a unique run ID
-- [ ] Run metadata stored: timestamp, ammeter type, sampling configuration
+*Goal: a robust archive of every test run.*
+
+- [ ] Unique run ID for every run
+- [ ] Metadata stored: timestamp, ammeter type, sampling configuration
 - [ ] Raw samples persisted, not only the computed summary
-- [ ] Results written to a predictable location under `results/`
-- [ ] Past runs can be listed
-- [ ] A specific past run can be retrieved by its ID
-- [ ] Two or more past runs can be compared side by side
-- [ ] Storage format is portable and human-readable (JSON and/or CSV)
-- [ ] **Observability:** the run ID travels as a Prometheus label so every pushed metric maps back to its archived run on disk
-- [ ] **Observability:** Pushgateway grouping keys chosen so a new run does not overwrite the previous run's metrics
-- [ ] **Observability:** Grafana can filter and compare historical runs by run ID
-- [ ] **Observability:** label cardinality considered and documented — run IDs as labels must not grow unbounded
+- [ ] Past runs can be listed, retrieved by ID, and compared side by side
+- [ ] Portable, human-readable storage under `results/` (JSON and/or CSV)
+- [ ] **Observability:** run ID travels as a label, grouping keys chosen so a new run cannot overwrite the previous one, label cardinality documented
 
-## ⬜ Milestone 6 — Accuracy Assessment (Bonus)
+## ⬜ Milestone 5 — Accuracy Assessment *(bonus)*
 
-- [ ] Runs from different ammeter types compared within a single report
-- [ ] The differing measurement magnitudes across devices handled explicitly (normalised, or an agreed reference stated)
+*Goal: compare measurements across ammeter types and quantify precision.*
+
+- [ ] Runs from different device types compared in a single report
+- [ ] The differing magnitudes across devices handled explicitly — normalised, or an agreed reference stated — ISS-23
 - [ ] Relative accuracy quantified per device
-- [ ] Measurement precision quantified using a named statistical technique
+- [ ] Precision quantified using a named statistical technique
 - [ ] Most reliable measurement method identified, with the reasoning recorded
-- [ ] (Bonus) Error simulation available to exercise the comparison
-- [ ] **Observability:** cross-ammeter comparison dashboard plotting all three devices on shared, normalised axes
-- [ ] **Observability:** precision / variability panel showing spread per device side by side
-- [ ] **Observability:** simulated error conditions visibly show up on the dashboard as a distinguishable signal
+- [ ] **Observability:** cross-device dashboard on shared normalised axes, with a side-by-side precision panel
 
-## ⬜ Milestone 7 — Documentation & Polish
+## ⬜ Milestone 6 — Documentation & polish
 
-- [ ] `README.md` project structure matches the real repo layout (every path and filename correct)
-- [ ] `README.md` ports and commands match the code exactly
-- [ ] Install instructions present: Python version, virtual environment, `pip install -r requirements.txt`
-- [ ] Usage instructions present: start the emulators, run a test, find the results
-- [ ] `requirements.txt` lists only packages actually imported by the project
-- [ ] Sample test results committed to the repository
-- [ ] `IMPLEMENTATION_NOTES.md` documents every bug fixed and the reasoning behind each fix
-- [ ] `IMPLEMENTATION_NOTES.md` documents design decisions and the alternatives rejected
-- [ ] `IMPLEMENTATION_NOTES.md` lists every dependency added beyond the standard library
-- [ ] Verified to run on Windows and on at least one POSIX system
-- [ ] No leftover debug printing that floods stdout during high-frequency sampling
-- [ ] **Observability:** `README.md` documents bringing the stack up, the ports it exposes, and where to find the dashboard
-- [ ] **Observability:** Grafana dashboard JSON committed under version control and provisioned automatically on startup
-- [ ] **Observability:** verified that the framework runs and produces complete results with the stack shut down — monitoring is never a hard dependency
-- [ ] **Observability:** a screenshot of the populated dashboard included with the sample results
-- [ ] **Observability:** `IMPLEMENTATION_NOTES.md` explains the Pushgateway choice (short-lived batch runs) over a scraped `/metrics` endpoint
+*Goal: the assignment's deliverables, complete and accurate.*
+
+- [ ] `README.md` structure, ports and commands match the real repo; install and usage instructions present — ISS-14
+- [ ] `requirements.txt` lists only what is actually imported — ISS-21
+- [ ] Sample test results committed (raw samples, statistics, metadata, plots)
+- [ ] `IMPLEMENTATION_NOTES.md` complete: every fix, every design decision and rejected alternative, every added dependency
+- [ ] Verified on Windows and on at least one POSIX system
+- [ ] **Observability:** stack documented in the README, dashboard JSON committed, and the framework verified to produce complete results with the stack shut down
