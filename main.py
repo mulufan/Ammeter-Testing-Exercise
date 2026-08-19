@@ -6,7 +6,7 @@ from src.testing.test_framework import AmmeterTestFramework
 from Ammeters.Circutor_Ammeter import CircutorAmmeter
 from Ammeters.Entes_Ammeter import EntesAmmeter
 from Ammeters.Greenlee_Ammeter import GreenleeAmmeter
-from Ammeters.client import request_current_from_ammeter
+from Ammeters.client import request_current_from_ammeter, AmmeterError
 
 
 def run_greenlee_emulator():
@@ -38,8 +38,17 @@ if __name__ == "__main__":
 
     framework = AmmeterTestFramework()
 
-    print(framework.get_measurement("greenlee"))
-    print(framework.get_measurement("entes"))
-    print(framework.get_measurement("circutor"))
+    # Sample every device in the config registry, so adding one is still a YAML edit.
+    for ammeter_type in framework.config["ammeters"]:
+        print(f"\n--- {ammeter_type} ---")
 
+        try:
+            measurements = framework.collect_samples(ammeter_type)
+        except AmmeterError as exc:
+            # One unreachable device must not cost the other two their samples.
+            print(f"Sampling failed: {exc}")
+            continue
+
+        for measurement in measurements:
+            print(measurement)
     pass
