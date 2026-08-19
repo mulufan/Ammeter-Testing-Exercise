@@ -1,328 +1,207 @@
 # Implementation Notes
 
-Every bug fixed, every design decision taken, and why. Written as the work happens, not
-reconstructed afterwards. Bugs are catalogued in [`ISSUES.md`](ISSUES.md); this file
-records what was *done* about them.
+How each part of the assignment was built, the decisions behind it, and the bugs fixed on
+the way. Organised by the sections of `Exam/ammeter-test-specification.md`, not by date.
+Individual bugs are catalogued in [`ISSUES.md`](ISSUES.md); this file records what was
+*done* about them and why.
 
-Dependencies added beyond the standard library: **none so far.**
+**Dependencies beyond the standard library: none.**
 
----
-
-## 2026-08-17 — Fix ISS-01 and ISS-02
-
-Branch: `fix/main-commands-and-ports`. Scope was deliberately limited to these two
-issues; everything else in `ISSUES.md` was left alone.
-
-### ISS-01 — request commands were missing their flags
-
-**Bug.** The three client calls in `main.py` sent bare device names
-(`b'MEASURE_GREENLEE'`). Each emulator compares the received bytes for *exact* equality
-against a command that includes flags, and `base_ammeter.py` has no `else` branch
-(ISS-11), so a non-matching command produced no reply and no log line at all.
-
-**Fix.** Each call now sends the command its device actually implements:
-
-| Device | Command sent | Source of truth |
-| --- | --- | --- |
-| Greenlee | `MEASURE_GREENLEE -get_measurement` | `Greenlee_Ammeter.py:9` |
-| ENTES | `MEASURE_ENTES -get_data` | `Entes_Ammeter.py:9` |
-| CIRCUTOR | `MEASURE_CIRCUTOR -get_measurement -current` | `Circutor_Ammeter.py:9` |
-
-The commands are not interchangeable and the differences are easy to miss: ENTES uses
-`-get_data` where the other two use `-get_measurement`, and CIRCUTOR alone takes a second
-flag, `-current`.
-
-**Decision — the calls were uncommented.** A commented-out call cannot be verified, and
-ISS-01's own acceptance criterion ("each call returns a float instead of 'No data
-received'") requires the requests to be sent. This is the minimum needed to demonstrate
-the fix; the rest of ISS-03 — the `time.sleep(5)` / `pass` structure, the missing return
-value from the client (ISS-04), and clean shutdown — is untouched and still open.
-
-**Known limitation.** The command strings are still hardcoded in `main.py`, duplicating
-what the emulator classes define. That duplication is ISS-08's to remove by making
-`config/config.yaml` the single source both sides read from.
-
-### ISS-02 — ports disagreed across three files
-
-**Bug.** `main.py` bound 5001/5002/5003; `README.md` and the commented block in
-`config/config.yaml` both said 5000/5001/5002. Every port was shifted by one, which is
-worse than a plain mismatch — `main.py`'s Greenlee port (5001) was the README's *ENTES*
-port, so a client written from the documentation connected successfully to the wrong
-device and received a plausible reading instead of failing. A silent wrong answer is the
-worst failure mode a measurement system has.
-
-**Fix.** Documentation was aligned to the code: **Greenlee 5001, ENTES 5002,
-CIRCUTOR 5003**, updated in `README.md` and in the commented `ammeters:` block in
-`config/config.yaml`. `main.py` was not changed.
-
-**Decision, and why it reverses what `ISSUES.md` originally recommended.** The audit had
-recommended adopting the documented 5000/5001/5002 on the grounds that two files agreed
-and only one disagreed. That reasoning counts files instead of weighing them, and it is
-wrong here:
-
-1. **Only one of the three executes.** `main.py` binds real sockets and demonstrably
-   works. The README is prose. `config.yaml`'s `ammeters:` block is *fully commented out*
-   (ISS-08), so `load_config(...)['ammeters']` is `None` and the file governs nothing.
-   The "majority" was two inert documents contradicting the one live implementation.
-2. **Port 5000 is already taken on macOS.** AirPlay Receiver binds it by default. The
-   spec requires cross-platform compatibility, so moving Greenlee to 5000 would have
-   written a guaranteed `bind()` failure into the code deliberately — surfacing as
-   exactly the "Address already in use" confusion ISS-10 is about. `ISSUES.md` noted this
-   caveat and then recommended 5000 anyway; the caveat should have decided the question.
-3. **Blast radius.** Editing documentation cannot regress runtime behaviour. Re-binding
-   ports changes the one part of the system currently proven to work, and invalidates any
-   per-port host firewall grants already accepted for the interpreter.
-
-**Known limitation.** The ports are still hardcoded in `main.py` and restated in two
-documents, so they can drift again. Only ISS-08 — deriving both the emulator binding and
-the client target from `config.yaml` — removes that possibility. The macOS caveat should
-be documented in the README once the port is genuinely overridable from config.
-
-### ISS-24 — found while verifying, deliberately not fixed
-
-With ISS-01 fixed, ENTES and CIRCUTOR returned readings but Greenlee still reported "No
-data received." The cause was not the command or the port:
-`Greenlee_Ammeter.py:15` prints the `Ω` character, this console's `sys.stdout.encoding`
-is `cp1255`, and the resulting `UnicodeEncodeError` propagates out of the accept loop and
-kills the emulator thread before it can reply.
-
-Logged as [ISS-24](ISSUES.md#iss-24) and left for its own change rather than folded into
-this one. It belongs with ISS-09/ISS-22 (route emulator output through a logger with an
-explicit encoding), and fixing it by reconfiguring `sys.stdout` would conceal the class of
-bug instead of removing it — a measurement path should not crash based on the operator's
-locale.
-
-### Verification
-
-`PYTHONIOENCODING=utf-8 python -u main.py` (the override works around ISS-24 only; no
-code was changed for it):
-
-```
-GreenleeAmmeter is running on port 5001
-CircutorAmmeter is running on port 5003
-EntesAmmeter is running on port 5002
-Connected by ('127.0.0.1', 63680)
-Greenlee Ammeter - Voltage: 6.8425700284351425V, Resistance: 16.297796925827683Ω, Current: 0.419846317853641A
-Received current measurement from port 5001: 0.419846317853641 A
-Connected by ('127.0.0.1', 63681)
-ENTES Ammeter - Magnetic Field: 0.05842951756298435T, Calibration Factor: 1457.0511508518853, Current: 85.13479580886678A
-Received current measurement from port 5002: 85.13479580886678 A
-Connected by ('127.0.0.1', 63682)
-CIRCUTOR Ammeter - Voltages: [...], Time Step: 0.004436110162709429s
-Current: 0.02552906396929699A
-Received current measurement from port 5003: 0.02552906396929699 A
-```
-
-All three devices answer, satisfying ISS-01. Each reading arrives on the port the README
-and `config.yaml` now document, and the device that answers on 5001 identifies itself as
-Greenlee — ISS-02's criterion that the documented port reach the intended device.
-
-Without the encoding override, Greenlee reports "No data received." per ISS-24. The
-readings also show the magnitude mismatch recorded in ISS-23 (0.42 A / 85 A / 0.026 A from
-one sweep) — these devices are not measuring a shared current.
-
-### Files touched
-
-| File | Change |
+| Assignment section | State |
 | --- | --- |
-| `main.py` | Three request commands given their flags and uncommented (ISS-01). Ports unchanged. |
-| `README.md` | Ports corrected to 5001 / 5002 / 5003 (ISS-02). |
-| `config/config.yaml` | Ports in the commented `ammeters:` block corrected to 5001 / 5002 / 5003 (ISS-02). Block left commented — uncommenting it is ISS-08. |
-| `ISSUES.md` | ISS-01 and ISS-02 marked fixed with rationale; ISS-02's original recommendation struck through; ISS-24 added. |
-| `IMPLEMENTATION_NOTES.md` | Created. |
-
-### Open question for review
-
-`config.yaml`'s commented CIRCUTOR entry now reads
-`"MEASURE_CIRCUTOR -get_measurement -current"` while `README.md:47` still documents it
-without `-current`. Both were wrong relative to the emulator; the config comment was
-corrected in passing and the README deliberately was not, so the two now disagree. This
-is ISS-07's territory and is parked there pending a decision on whether `-current` is a
-documentation error or a flag intended to be implemented differently.
+| Groundwork — make the supplied code run | done |
+| 1. Unified Measurement API | done |
+| 2. Measurement Sampling | done |
+| 3. Result Analysis | not started |
+| 4. Result Management | not started |
+| 5. Accuracy Assessment (bonus) | not started |
 
 ---
 
-## 2026-08-18 — Add GitHub Actions CI for pull requests
+## Groundwork — making the supplied code run
 
-Branch: `chore/github-actions-ci`, cut from `master` (not from the in-flight
-`feature/unified-measurement-api`, so the pull request carries only CI changes). No
-issue from `ISSUES.md` is fixed here; this stage adds infrastructure only.
+**What it delivers.** `python main.py` reaches all three emulators and gets a reading back.
+As supplied it got nothing: the client calls were commented out, and would not have worked
+if uncommented.
 
-### What CI does
+**Bugs fixed.** [ISS-01](ISSUES.md#iss-01) — the commented calls sent bare device names
+(`b'MEASURE_GREENLEE'`), but each emulator compares the received bytes for *exact* equality
+against a command that includes flags, and drops anything else without a reply
+([ISS-11](ISSUES.md#iss-11)). The three commands are not interchangeable: ENTES uses
+`-get_data` where the others use `-get_measurement`, and CIRCUTOR alone takes a second flag,
+`-current`. [ISS-02](ISSUES.md#iss-02) — `main.py` bound 5001/5002/5003 while the README and
+config said 5000/5001/5002. Every port was shifted by one, so a client written from the
+documentation connected *successfully to the wrong device* and got a plausible reading. A
+silent wrong answer is the worst failure mode a measurement system has.
 
-`.github/workflows/ci.yml` runs on `pull_request` against `master` and on
-`workflow_dispatch`. One job, `build`, on `ubuntu-latest` with Python 3.11 supplied
-through a one-entry matrix: development is on Windows, so running CI on Linux exercises
-the spec's cross-platform constraint rather than re-testing the dev machine. The matrix
-is a single entry today purely so adding versions later is a one-line change.
+**Decision — the documentation was aligned to the code (5001 / 5002 / 5003), not the other
+way round.** Two files said 5000 and one said 5001, but counting files is the wrong test:
+`main.py` is the only one of the three that executes, and port 5000 is taken by AirPlay
+Receiver on macOS, so adopting it would have written a guaranteed `bind()` failure into a
+project whose constraints include cross-platform support.
 
-Steps: checkout → `setup-python` (with pip caching keyed on `requirements.txt`) →
-`pip install -r requirements.txt` → byte-compile → import check.
-
-### Two levels of verification, deliberately
-
-`python -m compileall` only proves the sources *parse*. That would not have caught ISS-05
-(`Dict` used in `test_framework.py` but never imported), because the `NameError` fires when
-the annotation is evaluated at import time, not at compile time. So there is a second step,
-`scripts/ci_import_check.py`, which imports every module under `Ammeters/`, `src/` and
-`examples/` plus top-level `main.py`. Importing is safe: every entry point in the repo
-guards its work behind `if __name__ == "__main__":`, so no socket is bound during the check.
-
-The script lives in the repo rather than inline in the YAML so it can be run locally
-before pushing, with identical behaviour to CI.
-
-### Why the import check is currently non-blocking
-
-Run against `master` as it stands today:
-
-```
-OK   main
-OK   Ammeters.base_ammeter
-OK   Ammeters.Circutor_Ammeter
-OK   Ammeters.client
-OK   Ammeters.Entes_Ammeter
-OK   Ammeters.Greenlee_Ammeter
-FAIL src.testing.test_framework     NameError: name 'Dict' is not defined
-OK   src.utils.config
-OK   src.utils.logger
-OK   src.utils.Utils
-FAIL examples.run_tests             (same NameError, via its import)
-
-2 module(s) failed to import.
-```
-
-Both failures are ISS-05 — `examples/run_tests.py` fails only because it imports the
-broken module. This is a genuine pre-existing bug, already fixed on
-`feature/unified-measurement-api` but not yet on `master`. A pull request's checks run
-against the merge of the branch and its base, so a blocking import step would make this
-very pull request red for a defect it does not introduce, and block its own merge.
-
-The step therefore carries `continue-on-error: true`: the failure is visible in the log
-on every pull request, but it does not gate. **When ISS-05's fix reaches `master`, delete
-that one line** and the import check becomes a hard gate. `compileall` is blocking from
-the start, since it passes on `master` today.
-
-Rejected alternatives: (a) enumerating only the modules that currently import cleanly —
-this hides the defect and silently under-tests as files are added; (b) fixing ISS-05 in
-this branch — out of scope for a CI stage, and it would collide with the fix already
-committed on the feature branch.
-
-### No fake tests
-
-The task explicitly excludes placeholder tests, and none were added — there is no test
-suite yet, and a green `pytest` run over zero tests would assert nothing. The workflow
-ends with a comment marking exactly where the `pytest` step goes when Stage 5+ produces
-real tests.
-
-### Dependencies
-
-None added. `requirements.txt` is unchanged; CI installs it as-is (including the numpy /
-scipy / matplotlib / seaborn / pandas pins that nothing imports yet — recorded in
-`ISSUES.md`, not touched here). `pytest` gets added when tests do.
-
-### Files touched
-
-| File | Change |
-| --- | --- |
-| `.github/workflows/ci.yml` | New. Pull-request CI: setup Python, install deps, compile, import check. |
-| `scripts/ci_import_check.py` | New. Imports every project module; non-zero exit if any fail. Runnable locally. |
-| `README.md` | New "Development Workflow" section: branch → pull request → CI green → merge → delete branch, plus the local equivalents of the CI checks. |
-| `IMPLEMENTATION_NOTES.md` | This entry. |
-
-*Resolved 2026-08-18 — the README was corrected to match the emulator.*
+**Found here, still open.** [ISS-24](ISSUES.md#iss-24) — `Greenlee_Ammeter.py` prints the `Ω`
+character, so on a console whose encoding is not UTF-8 (this machine's is `cp1255`) the
+`UnicodeEncodeError` propagates out of the accept loop and kills the Greenlee thread before
+it can reply. Run with `PYTHONIOENCODING=utf-8` until it is fixed. It belongs with the
+logger work (ISS-09 / ISS-22); reconfiguring `sys.stdout` would hide the class of bug rather
+than remove it — a measurement path should not fail based on the operator's locale.
 
 ---
 
-## 2026-08-18 — Unified measurement API
+## 1. Unified Measurement API
 
-Branch: `feature/unified-measurement-api`. One entry point for all three devices, driven by
-the config registry, returning one result type and raising on failure. Sampling, statistics,
-storage and logging are out of scope.
+**What it delivers.** One call — `AmmeterTestFramework.get_measurement(ammeter_type)` —
+works for all three devices and returns the same result type for each.
 
-Closes ISS-04, ISS-07, ISS-08 and ISS-12, plus the import half of ISS-05 and ISS-19.
+**How it works.** `config/config.yaml` is the device registry: each entry carries a port and
+a command string, so adding a fourth ammeter is a YAML edit rather than a code change.
+`Ammeters/client.py` does one connect → send → recv, parses the reply to `float`, and either
+returns it or raises. The framework wraps that float in a `Measurement`.
 
-### Fixes
+**Decisions.**
 
-- **ISS-08** — `ammeters:` uncommented and populated. `config.yaml` is now the registry that
-  `get_measurement()` reads port and command from, so adding a device is a YAML edit. `main.py`
-  still hardcodes the ports it *binds*, so the server half of the duplication remains (ISS-18).
-- **ISS-04 / ISS-12** — the client returns `float` instead of printing and returning `None`;
-  applies `settimeout(5.0)` before `connect()`, covering both connect and recv; and raises
-  `AmmeterConnectionError` (unreachable or timed out) or `AmmeterResponseError` (empty,
-  non-UTF-8, or non-numeric reply) instead of hanging or surfacing a bare `OSError`.
-- **ISS-05 / ISS-19** — `Dict` imported; the relative `..utils.config` import made absolute to
-  match the rest of the file; `__init__.py` added to all four package directories. Adding only
-  some is worse than none — a regular package containing a namespace subpackage resolves on
-  some interpreters and not others.
-- **ISS-07** — README CIRCUTOR command corrected to `-get_measurement -current`. The emulator
-  is the source of truth; the README was wrong.
-
-### Decisions
-
-- **`Measurement` dataclass, not a `Dict`.** Typed fields catch a mistyped key at the point of
-  the mistake rather than as a `None` several stages later, and `dataclasses.asdict()` covers
-  the storage stage. Frozen, because a sample records something that already happened.
-- **Timestamp is a timezone-aware UTC `datetime`.** Comparable without parsing, so the sampling
-  engine can measure actual versus requested intervals; formatting belongs at the storage
-  boundary. Naive local times break comparison across machines and across a DST change.
-- **No `ok` / `error` fields — failures raise.** A result type that can mean "no measurement"
-  pushes the check onto every consumer, and the one that forgets feeds `None` into
-  `statistics.mean()`. The cost lands in the sampling stage: a fault-tolerant run must catch
-  `AmmeterError` per sample and keep its own tally of failures.
-- **Two exception types, not three.** "Unreachable" and "bad reply" call for different caller
+- **A typed `Measurement` dataclass, not a dict.** A mistyped key fails at the point of the
+  mistake instead of arriving as a `None` three stages later, and `dataclasses.asdict()`
+  covers the archiving stage for free. Frozen, because a sample records something that has
+  already happened.
+- **The timestamp is a timezone-aware UTC `datetime`.** Comparable across machines and
+  across a DST change without parsing; formatting belongs at the storage boundary.
+- **Failures raise; there is no `ok` / `error` field.** A result type that can mean "no
+  measurement" pushes a check onto every consumer, and the consumer that forgets feeds
+  `None` into `statistics.mean()`. The cost is that fault-tolerant sampling must catch per
+  sample — which Stage 2 does deliberately.
+- **Two exception types, not three.** `AmmeterConnectionError` (unreachable, timed out) and
+  `AmmeterResponseError` (empty, non-UTF-8 or non-numeric reply) call for different caller
   behaviour; empty versus malformed does not.
-- **`AmmeterError` derives from `RuntimeError` deliberately.** Response errors are raised
-  inside the same `try` that guards the socket, so a base of `OSError` or `ValueError` would
-  see them caught by that handler and relabelled as connection failures. Do not change this
-  base class without re-reading this line.
+- **`AmmeterError` derives from `RuntimeError` on purpose.** Response errors are raised
+  inside the same `try` that guards the socket, so a base of `OSError` would see them caught
+  by that handler and mislabelled as connection failures. Do not change this base class
+  without re-reading this line.
 
-### Dependencies
+**Bugs fixed.** [ISS-04](ISSUES.md#iss-04) client returned `None` instead of the reading ·
+[ISS-12](ISSUES.md#iss-12) no timeout and no error handling (now `settimeout(5.0)` before
+`connect()`, covering both connect and recv) · [ISS-05](ISSUES.md#iss-05) `Dict` used but
+never imported, plus a relative import that broke direct execution ·
+[ISS-08](ISSUES.md#iss-08) the `ammeters:` block was entirely commented out ·
+[ISS-07](ISSUES.md#iss-07) README documented CIRCUTOR without `-current` ·
+[ISS-19](ISSUES.md#iss-19) missing `__init__.py` in all four package directories — adding
+only some is worse than adding none, since a regular package containing a namespace
+subpackage resolves on some interpreters and not others.
 
-None added. `dataclasses`, `datetime`, `socket` and `typing` are all standard library.
+**Verified.** One `Measurement` per device from `python main.py`, and each error path
+exercised against stand-in servers replying with deliberate junk: dead port →
+`AmmeterConnectionError`; wrong command (empty reply), non-numeric reply and non-UTF-8 reply
+→ `AmmeterResponseError`.
 
-### Verification
+---
 
-`python main.py` — one `Measurement` per device (emulator debug prints omitted):
+## 2. Measurement Sampling
 
-```
-Measurement(ammeter_type='greenlee', current=0.1452933538316761, unit='A', timestamp=datetime.datetime(2026, 8, 18, 11, 40, 49, 148726, tzinfo=datetime.timezone.utc))
-Measurement(ammeter_type='entes',    current=11.536727984656562,  unit='A', timestamp=...164440, tzinfo=datetime.timezone.utc))
-Measurement(ammeter_type='circutor', current=0.04114656601847207, unit='A', timestamp=...181479, tzinfo=datetime.timezone.utc))
-```
+**What it delivers.** `collect_samples(ammeter_type)` runs a schedule described by
+`measurements_count`, `total_duration_seconds` and `sampling_frequency_hz`, and returns the
+list of `Measurement`s.
 
-Error paths, via an ad-hoc probe (not committed) running a real emulator alongside two
-stand-in servers replying with deliberate junk:
+**How it works.** `_get_sampling_config()` resolves the configuration first, then the loop
+sleeps until each sample's target time and takes one reading.
 
-```
-[dead port]                    AmmeterConnectionError: ... on port 5999: timed out
-[wrong command (empty reply)]  AmmeterResponseError:   No response received from ammeter on port 5001
-[non-numeric reply]            AmmeterResponseError:   Invalid response received from ammeter on port 5901
-[non-utf8 reply]               AmmeterResponseError:   Invalid response received from ammeter on port 5902
-```
+**Decisions.**
 
-The dead-port case reports `timed out` because Windows drops a connect to a closed loopback
-port rather than refusing it; Linux reports `Connection refused`. Both classify correctly.
+- **The three parameters are over-determined, so any two derive the third** — there is no
+  precedence rule picking a winner. A precedence rule silently ignores whatever the operator
+  wrote in the losing field; derivation turns a contradictory configuration into an error.
+  If all three are given, they are checked for agreement.
+- **The relation is `count = duration × frequency + 1`** — fencepost, not "samples per
+  window": 5 samples at 2 Hz span exactly 2.0 s, the first at t=0 and the last at t=2.0.
+  Worth knowing when presenting: `count=10, duration=10, frequency=1` is *rejected*, because
+  10 samples at 1 Hz span 9 s.
+- **Each sample is scheduled against an absolute target** (`start + index × period` off
+  `time.monotonic()`), not by sleeping one period between samples. Sleeping relatively feeds
+  the round-trip time of every request back into the schedule, so error accumulates;
+  anchoring to the start keeps it per-sample. Monotonic, so a clock adjustment mid-run
+  cannot move the schedule. Measured: 5 samples at 2 Hz completed in **2.016 s**, worst
+  inter-sample error 11 ms, and not growing across the run.
+- **A bad reply skips one sample; an unreachable device aborts the run.** A malformed
+  reading is one lost data point; a device that has stopped answering will not start again on
+  its own, and continuing would produce a run whose sample count means nothing.
+- **`main.py` catches per device.** ISS-24 kills the Greenlee thread on a non-UTF-8 console,
+  and without the per-device catch that one dead device would take the other two down with
+  it — the abort policy above is deliberately blunt, so the caller contains it.
+- **Configured values are validated as positive numbers before any arithmetic** (added in
+  review). Zero and negative values otherwise survive the derivation and surface much later:
+  `duration=0` raised a bare `ZeroDivisionError`, `frequency=0` and `count=1` crashed inside
+  the sampling loop, and `count=-3` produced an empty run with no error at all. `bool` is
+  rejected explicitly, since it would otherwise pass as `int`.
+- **A derived count is floored, and the duration recomputed from it** (added in review).
+  `int(duration × frequency) + 1` truncated without adjusting the duration, so
+  `duration=1, frequency=1.5` returned `count=2, duration=1` — a triple that fails the very
+  consistency check this function applies elsewhere, and that Stage 4 would archive as run
+  metadata. Flooring keeps the run inside the requested duration; the tolerance absorbs float
+  representation error (`0.3 * 10` is `2.9999999999999996`).
 
-**ISS-24 is not fixed** — it merely did not trigger, because `sys.stdout.encoding` was `utf-8`
-in the shell used here.
+**Bugs fixed.** [ISS-13](ISSUES.md#iss-13) — all three sampling parameters were `NULL` in
+`config.yaml`, with no stated rule for which wins when more than one is supplied.
 
-### Files touched
+**Known limits.** Overrun is not recorded: when a round trip is longer than the period the
+loop free-runs, and 50 samples requested at 1000 Hz ran at an effective 61.6 Hz with nothing
+logged. Skipped samples are not tallied, so a short result list is indistinguishable from a
+short configuration. Errors go to stdout via `print`, interleaving with results, until the
+logger (ISS-09) is built.
 
-| File | Change |
-| --- | --- |
-| `Ammeters/client.py` | Returns `float`; timeout; exception hierarchy; prints removed (ISS-04, ISS-12). |
-| `src/testing/measurement.py` | **New.** Frozen `Measurement` dataclass with UTC timestamp. |
-| `src/testing/test_framework.py` | `get_measurement()` resolves port/command from config and returns a `Measurement`; imports fixed (ISS-05). |
-| `config/config.yaml` | `ammeters:` block uncommented and populated (ISS-08). |
-| `README.md` | CIRCUTOR command corrected (ISS-07). |
-| `Ammeters/`, `src/`, `src/testing/`, `src/utils/` — `__init__.py` | **New**, empty (ISS-19, partial). |
-| `main.py` | Calls the framework per device and prints the result. |
+**Verified.** `python main.py` — 5 samples from each of the three devices, ~0.5 s apart.
+Under `PYTHONIOENCODING=cp1255`, Greenlee reports `Sampling failed: ...` per ISS-24 and the
+other two still deliver their samples.
 
-### Still open
+---
 
-- `config_path` is still CWD-relative and the config is unvalidated — deferred to ISS-15 so the
-  path fix and the missing-file/schema handling land together rather than half in two places.
-- `main.py` keeps the supplied `sleep(5)` and trailing `pass`; removing them needs ISS-10 and a
-  readiness signal (ISS-18), not just deletion.
+## 3. Result Analysis — not started
+
+Mean, median, standard deviation, min and max over a run, via the standard-library
+`statistics` module. Visualisation and consistency evaluation are the bonus half.
+
+## 4. Result Management — not started
+
+Unique run IDs, metadata, on-disk archiving, retrieval and comparison of historical runs.
+
+## 5. Accuracy Assessment (bonus) — not started
+
+Cross-device comparison has to confront [ISS-23](ISSUES.md#iss-23) first: the three
+emulators produce non-comparable magnitudes (roughly 0.4 A / 85 A / 0.026 A in one sweep),
+so they are not measuring a shared current and a naive accuracy comparison would be
+meaningless without normalisation or a stated reference.
+
+---
+
+## Supporting work — continuous integration
+
+`.github/workflows/ci.yml` runs on every pull request to `master`: install requirements,
+byte-compile every source file, then import every module via `scripts/ci_import_check.py`.
+Both steps exist because `compileall` only proves the sources *parse* — it would not have
+caught ISS-05, whose `NameError` fires when the annotation is evaluated at import time. CI
+runs on Linux while development is on Windows, which is what actually exercises the
+cross-platform constraint.
+
+The import step carries `continue-on-error: true` because ISS-05 was still unfixed on
+`master` when CI was added, and a blocking step would have made that pull request red for a
+defect it did not introduce. **Once the ISS-05 fix is merged to `master`, delete that line**
+and the check becomes a hard gate.
+
+No placeholder tests were added — a green `pytest` run over zero tests asserts nothing. The
+workflow marks where the `pytest` step goes when Stage 3 produces real tests.
+
+---
+
+## Open items
+
+- `config_path` is CWD-relative and the config is never validated against a schema
+  ([ISS-15](ISSUES.md#iss-15)) — the path fix and the missing-file handling should land
+  together rather than half in two places.
+- `main.py` still hardcodes the ports it *binds*, so `config.yaml` is the single source of
+  truth for the client half only ([ISS-08](ISSUES.md#iss-08)).
+- `main.py` keeps the supplied `sleep(5)` and trailing `pass`; removing them needs a
+  readiness signal and a shutdown path ([ISS-10](ISSUES.md#iss-10),
+  [ISS-18](ISSUES.md#iss-18)), not just deletion.
 - `AmmeterResponseError` names the port but not the offending payload — recoverable from the
-  chained traceback, absent from the log line an operator actually reads.
+  chained traceback, absent from the line an operator actually reads.
+- ISS-24 (the `Ω` print) is unfixed; Greenlee needs `PYTHONIOENCODING=utf-8` on a non-UTF-8
+  console.
