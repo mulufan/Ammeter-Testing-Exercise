@@ -22,7 +22,8 @@ class AmmeterEmulatorBase(ABC):
             while True:
                 conn, addr = s.accept()
                 with conn:
-                    print(f"Connected by {addr}")
+                    # NOTE:(MF), comment this line to avoid printing.
+                    # print(f"Connected by {addr}") 
                     data = conn.recv(1024)
                     if data == self.get_current_command:
                         # Call the specific measure_current() method defined in subclasses
