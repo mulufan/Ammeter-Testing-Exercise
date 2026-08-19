@@ -4,8 +4,9 @@ name: CI
 # master itself is only written to through pull requests, so this is the gate.
 on:
   pull_request:
-    branches:
-      - master
+    branches: [master]
+  push:
+    branches: [master]
   workflow_dispatch:
 
 jobs:
