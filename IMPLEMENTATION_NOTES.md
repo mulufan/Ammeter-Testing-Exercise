@@ -12,7 +12,7 @@ Individual bugs are catalogued in [`ISSUES.md`](ISSUES.md); this file records wh
 | Groundwork — make the supplied code run | done |
 | 1. Unified Measurement API | done |
 | 2. Measurement Sampling | done |
-| 3. Result Analysis | not started |
+| 3. Result Analysis | done |
 | 4. Result Management | not started |
 | 5. Accuracy Assessment (bonus) | not started |
 
@@ -154,10 +154,45 @@ other two still deliver their samples.
 
 ---
 
-## 3. Result Analysis — not started
+## 3. Result Analysis
 
-Mean, median, standard deviation, min and max over a run, via the standard-library
-`statistics` module. Visualisation and consistency evaluation are the bonus half.
+**What it delivers.** `analyze_measurements(measurements)` reduces a run to an
+`AnalysisResult`: sample count, mean, median, standard deviation, min and max. Standard
+library `statistics` only.
+
+**Decisions.**
+
+- **Sample standard deviation (`stdev`, n−1), not population (`pstdev`, n)** (changed in
+  review). These are repeated readings sampling a noisy process, not an enumerated
+  population, so the quantity wanted is an estimate of the process spread — and the
+  unbiased estimator divides by n−1. It is also what metrology uses for Type A
+  uncertainty, which matters because section 5 compares precision across devices and
+  would inherit the bias. Not a rounding difference: on `[10, 20, 30, 40, 50]`, `pstdev`
+  gives 14.142 against `stdev`'s 15.811, a 11.8% understatement at n=5.
+- **`standard_deviation` is `None` at n=1, not `0.0`** (changed in review). `pstdev`
+  returns `0.0` for a single sample, which reads as a measurement of perfect precision
+  from one reading; the honest answer is that the statistic is undefined. `stdev` raises
+  there, so the n=1 case is checked explicitly and the field is typed `float | None`.
+  Consumers get a value that cannot be mistaken for a real spread.
+- **Measurements from more than one device are rejected** (added in review). The method
+  originally averaged whatever it was given: a mixed list produced
+  `mean=28.475, stdev=39.97` from 85 A, 0.4 A and 0.026 A — arithmetic over three devices
+  that are not measuring a shared current ([ISS-23](ISSUES.md#iss-23)). That is the exact
+  failure mode section 5 has to confront, and the analysis layer was the place it became
+  invisible. `AnalysisResult` now also carries `ammeter_type`, so a result is
+  self-describing when section 4 archives it.
+- **An empty list raises rather than returning zeros.** `collect_samples` can legitimately
+  return `[]` when every read fails, and a result full of zeros would archive as though
+  the run had succeeded.
+
+**Known limits.** The metric set is hardcoded; `analysis.statistical_metrics` in
+`config.yaml` is still unread. `AnalysisResult` has no `__str__`, so reporting is the
+dataclass repr with full float precision. The unit from `Measurement` is dropped.
+
+**Verified.** `[10, 20, 30, 40, 50]` → mean 30.0, median 30.0, stdev 15.811, min 10.0,
+max 50.0. n=1 → `standard_deviation=None`. Empty list and a mixed entes/circutor list both
+raise `ValueError`. Note that this section raises the floor to **Python 3.10** (`float |
+None` is evaluated at import); CI pins 3.11 and the README now states the requirement.
 
 ## 4. Result Management — not started
 

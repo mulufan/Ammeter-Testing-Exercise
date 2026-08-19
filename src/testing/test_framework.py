@@ -1,13 +1,15 @@
 import math
 import time
+import statistics
 
 from typing import Dict
 
 from Ammeters.client import request_current_from_ammeter
-from src.testing.models import Measurement, SamplingConfig
+from Ammeters.client import AmmeterConnectionError, AmmeterResponseError
+
+from src.testing.models import (Measurement, SamplingConfig, AnalysisResult)
 from src.utils.config import load_config
 
-from Ammeters.client import AmmeterConnectionError, AmmeterResponseError
 
 # Absolute tolerance for comparing configured and derived sampling parameters.
 SAMPLING_TOLERANCE = 1e-9
@@ -34,7 +36,7 @@ def _validate_positive(name: str, value, integer: bool = False) -> None:
 class AmmeterTestFramework:
     def __init__(self, config_path: str = "config/config.yaml"):
         self.config = load_config(config_path)
-        
+
     def run_test(self, ammeter_type: str) -> Dict:
         pass
 
@@ -161,4 +163,38 @@ class AmmeterTestFramework:
                 raise
 
         return measurements
-        
+
+    def analyze_measurements(self, measurements: list[Measurement]) -> AnalysisResult:
+        """
+        Calculate the required statistical metrics for a set of measurements.
+
+        The samples must all come from one device: the three emulators read in
+        different magnitudes, so a statistic spanning them describes nothing.
+        The standard deviation is the sample one (n-1), and is None at n=1.
+        """
+        if not measurements:
+            raise ValueError("Cannot analyze an empty measurement list.")
+
+        ammeter_types = {measurement.ammeter_type for measurement in measurements}
+
+        if len(ammeter_types) != 1:
+            raise ValueError(
+                "All measurements must be from the same ammeter type for analysis, "
+                f"got {sorted(ammeter_types)}."
+            )
+
+        ammeter_type = next(iter(ammeter_types))
+        current_values = [measurement.current for measurement in measurements]
+
+        return AnalysisResult(
+            ammeter_type=ammeter_type,
+            sample_count=len(current_values),
+            mean_current=statistics.mean(current_values),
+            median_current=statistics.median(current_values),
+            # Undefined for a single sample - see AnalysisResult.
+            standard_deviation=(
+                statistics.stdev(current_values) if len(current_values) > 1 else None
+            ),
+            min_current=min(current_values),
+            max_current=max(current_values),
+        )
