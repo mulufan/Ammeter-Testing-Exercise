@@ -1,6 +1,6 @@
 # Roadmap
 
-A living document. Check items off as they ship. Last updated: 2026-08-18.
+A living document. Check items off as they ship. Last updated: 2026-08-19.
 
 Milestones 1–5 are the five sections of the assignment's Problem Statement, in its order and
 under its names. Milestone 0 (fixing the supplied code) and Milestone 6 (documentation) are
@@ -46,15 +46,20 @@ consistently.*
 - [ ] Emulator start/stop controllable from the framework, not only from `main.py`
 - [ ] **Observability:** one shared registry behind the client, so every device is instrumented identically — call counter, error counter by failure kind, and latency histogram, all labelled by ammeter type
 
-## ⬜ Milestone 2 — Measurement Sampling
+## 🟡 Milestone 2 — Measurement Sampling
 
 *Goal: configurable sampling with precise timing and data collection.*
 
-- [ ] A run is driven by number of measurements, by total duration, or by sampling frequency
-- [ ] Precedence rule defined and documented for when they are combined
-- [ ] Monotonic, drift-free timing; achieved rate reported next to the requested rate
-- [ ] A failed sample is tallied and the run continues rather than aborting
-- [ ] Sampling parameters read from `config.yaml` with real defaults, no `NULL` placeholders — ISS-13
+- [x] A run is driven by number of measurements, by total duration, or by sampling frequency
+- [x] Rule for combining the three defined and documented — they are over-determined, so any
+      two derive the third and a contradictory trio is rejected, in place of a precedence rule
+- [x] Configured values validated before use: positive numbers only, a derived count floored
+      and its duration recomputed, so the resolved config always describes the actual run
+- [x] Monotonic, drift-free timing — each sample targets `start + index × period`
+- [ ] Achieved rate reported next to the requested rate; overrun is currently silent
+- [ ] A failed sample is tallied and the run continues rather than aborting — a bad reply is
+      skipped but not counted, and an unreachable device still aborts the run by design
+- [x] Sampling parameters read from `config.yaml` with real defaults, no `NULL` placeholders — ISS-13
 - [ ] **Observability:** requested vs achieved rate, per-run success/failure counts, run duration and timing drift pushed at the end of each run
 
 ## ⬜ Milestone 3 — Result Analysis
