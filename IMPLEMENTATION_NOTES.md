@@ -185,9 +185,15 @@ library `statistics` only.
   return `[]` when every read fails, and a result full of zeros would archive as though
   the run had succeeded.
 
+**Reporting.** `AnalysisResult.__str__` renders the run as a labelled block, and `main.py`
+prints one per device. Values are formatted to six significant figures rather than a fixed
+decimal count: the devices read three orders of magnitude apart, so `%.2f` would show every
+CIRCUTOR statistic as `0.01`. An undefined standard deviation prints as
+`n/a (needs 2+ samples)`, never as a number.
+
 **Known limits.** The metric set is hardcoded; `analysis.statistical_metrics` in
-`config.yaml` is still unread. `AnalysisResult` has no `__str__`, so reporting is the
-dataclass repr with full float precision. The unit from `Measurement` is dropped.
+`config.yaml` is still unread. The unit from `Measurement` is dropped — `__str__` hardcodes
+`A`.
 
 **Verified.** `[10, 20, 30, 40, 50]` → mean 30.0, median 30.0, stdev 15.811, min 10.0,
 max 50.0. n=1 → `standard_deviation=None`. Empty list and a mixed entes/circutor list both
@@ -216,10 +222,10 @@ caught ISS-05, whose `NameError` fires when the annotation is evaluated at impor
 runs on Linux while development is on Windows, which is what actually exercises the
 cross-platform constraint.
 
-The import step carries `continue-on-error: true` because ISS-05 was still unfixed on
+The import step carried `continue-on-error: true` because ISS-05 was still unfixed on
 `master` when CI was added, and a blocking step would have made that pull request red for a
-defect it did not introduce. **Once the ISS-05 fix is merged to `master`, delete that line**
-and the check becomes a hard gate.
+defect it did not introduce. That fix has since merged, so the line is gone and both steps
+are hard gates.
 
 No placeholder tests were added — a green `pytest` run over zero tests asserts nothing. The
 workflow marks where the `pytest` step goes when Stage 3 produces real tests.
