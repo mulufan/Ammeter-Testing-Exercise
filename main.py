@@ -51,4 +51,12 @@ if __name__ == "__main__":
 
         for measurement in measurements:
             print(measurement)
+
+        if not measurements:
+            # Every sample was skipped on a bad reply; there is nothing to analyse.
+            print("No samples collected, skipping analysis.")
+            continue
+
+        print()
+        print(framework.analyze_measurements(measurements))
     pass
