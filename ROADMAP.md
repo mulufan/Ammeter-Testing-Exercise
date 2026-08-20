@@ -1,6 +1,6 @@
 # Roadmap
 
-A living document. Check items off as they ship. Last updated: 2026-08-19.
+A living document. Check items off as they ship. Last updated: 2026-08-20.
 
 Milestones 1–5 are the five sections of the assignment's Problem Statement, in its order and
 under its names. Milestone 0 (fixing the supplied code) and Milestone 6 (documentation) are
@@ -80,15 +80,18 @@ consistently.*
 - [ ] *(Bonus)* Performance consistency evaluated with a named variability metric
 - [ ] **Observability:** the five statistics pushed as labelled gauges, with a provisioned Grafana dashboard panel for each
 
-## ⬜ Milestone 4 — Result Management
+## 🟡 Milestone 4 — Result Management
 
 *Goal: a robust archive of every test run.*
 
-- [ ] Unique run ID for every run
-- [ ] Metadata stored: timestamp, ammeter type, sampling configuration
-- [ ] Raw samples persisted, not only the computed summary
-- [ ] Past runs can be listed, retrieved by ID, and compared side by side
-- [ ] Portable, human-readable storage under `results/` (JSON and/or CSV)
+- [x] Unique run ID for every run — UUID4, assigned in `run_test`
+- [x] Metadata stored: timestamp, ammeter type, sampling configuration
+- [x] Raw samples persisted, not only the computed summary
+- [x] Past runs can be listed, retrieved by ID, and compared side by side — listing returns
+      `RunSummary` ordered by start time; comparison renders archived statistics as a table
+      and computes nothing across runs
+- [x] Portable, human-readable storage under `results/` (JSON and/or CSV) — one JSON file per
+      run, path resolved from the project root; JSON only, no CSV export
 - [ ] **Observability:** run ID travels as a label, grouping keys chosen so a new run cannot overwrite the previous one, label cardinality documented
 
 ## ⬜ Milestone 5 — Accuracy Assessment *(bonus)*
@@ -108,7 +111,9 @@ consistently.*
 
 - [ ] `README.md` structure, ports and commands match the real repo; install and usage instructions present — ISS-14
 - [ ] `requirements.txt` lists only what is actually imported — ISS-21
-- [ ] Sample test results committed (raw samples, statistics, metadata, plots)
+- [ ] Sample test results committed (raw samples, statistics, metadata, plots) — one curated
+      run per device is committed under `results/samples/` with raw samples, statistics and
+      metadata; the plots are still missing, pending the section 3 visualisation bonus
 - [ ] `IMPLEMENTATION_NOTES.md` complete: every fix, every design decision and rejected alternative, every added dependency
 - [ ] Verified on Windows and on at least one POSIX system
 - [ ] **Observability:** stack documented in the README, dashboard JSON committed, and the framework verified to produce complete results with the stack shut down
