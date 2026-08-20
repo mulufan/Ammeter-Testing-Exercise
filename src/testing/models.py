@@ -51,3 +51,26 @@ class AnalysisResult:
     standard_deviation: float | None
     min_current: float
     max_current: float
+
+    def __str__(self) -> str:
+        """
+        A readable run summary. Values are formatted to six significant figures
+        rather than a fixed number of decimals: the devices read three orders of
+        magnitude apart, and `%.2f` would render every CIRCUTOR statistic as 0.01.
+        """
+        rows = [
+            ("mean", self.mean_current),
+            ("median", self.median_current),
+            ("std dev", self.standard_deviation),
+            ("min", self.min_current),
+            ("max", self.max_current),
+        ]
+
+        lines = [f"{self.ammeter_type} - {self.sample_count} sample(s)"]
+
+        for label, value in rows:
+            # None only ever reaches here as the standard deviation at n=1.
+            rendered = "n/a (needs 2+ samples)" if value is None else f"{value:.6g} A"
+            lines.append(f"  {label:<8} {rendered}")
+
+        return "\n".join(lines)

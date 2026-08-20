@@ -62,14 +62,20 @@ consistently.*
 - [x] Sampling parameters read from `config.yaml` with real defaults, no `NULL` placeholders — ISS-13
 - [ ] **Observability:** requested vs achieved rate, per-run success/failure counts, run duration and timing drift pushed at the end of each run
 
-## ⬜ Milestone 3 — Result Analysis
+## 🟡 Milestone 3 — Result Analysis
 
 *Goal: comprehensive statistics over a run.*
 
-- [ ] Mean, median, standard deviation, minimum and maximum current per run
-- [ ] Sample count and failure count reported alongside the statistics
-- [ ] Computed with the standard library `statistics` module unless an added dependency is justified
-- [ ] Run summary printed in a clear, readable format
+- [x] Mean, median, standard deviation, minimum and maximum current per run
+- [ ] Sample count and failure count reported alongside the statistics — sample count is in
+      `AnalysisResult`; the failure tally is the open Milestone 2 item above
+- [x] Computed with the standard library `statistics` module unless an added dependency is justified
+- [x] Statistics over a mixed-device list rejected, and the device recorded on the result —
+      the three emulators read in different magnitudes, so a statistic spanning them is
+      meaningless — ISS-23
+- [x] Run summary printed in a clear, readable format — `AnalysisResult.__str__`, called per
+      device from `main.py`; six significant figures, since the devices read orders of
+      magnitude apart
 - [ ] *(Bonus)* Measurement series over time and per-device distribution plots saved with the run
 - [ ] *(Bonus)* Performance consistency evaluated with a named variability metric
 - [ ] **Observability:** the five statistics pushed as labelled gauges, with a provisioned Grafana dashboard panel for each

@@ -42,11 +42,10 @@ jobs:
         run: python -m compileall -q main.py Ammeters src examples scripts
 
       - name: Import check
-        # Softer gate: imports also execute module level code. master currently has a
-        # known import failure (src/testing/test_framework.py, ISS-05 in ISSUES.md), so this
-        # step reports without failing the build. Remove continue-on-error once that
-        # fix has landed on master, making the import check blocking.
-        continue-on-error: true
+        # Hard gate: imports also execute module level code, which is what catches the
+        # class of bug compileall cannot (ISS-05 was a NameError in an annotation). This
+        # was reported without blocking while ISS-05 was still open on master; that fix
+        # has landed, so the step now fails the build.
         run: python scripts/ci_import_check.py
 
       # Next step for this workflow: once tests exist, add
