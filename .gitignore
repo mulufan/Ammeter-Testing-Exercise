@@ -13,6 +13,14 @@ __pycache__/
 # ignore pdf and other additional learning files
 *.pdf
 
+# Generated run artefacts. The archive under results/runs/ is machine-written,
+# UUID-named and unbounded - every local run would otherwise land in the diff -
+# and results/logs/ is the same. The curated sample runs under results/samples/
+# are an assignment deliverable and stay tracked.
+
+results/*
+!results/samples/
+
 # Local assistant / tooling working files - not part of the deliverable
 CLAUDE.md
 .claude/

@@ -13,7 +13,7 @@ Individual bugs are catalogued in [`ISSUES.md`](ISSUES.md); this file records wh
 | 1. Unified Measurement API | done |
 | 2. Measurement Sampling | done |
 | 3. Result Analysis | done |
-| 4. Result Management | not started |
+| 4. Result Management | done |
 | 5. Accuracy Assessment (bonus) | not started |
 
 ---
@@ -200,9 +200,84 @@ max 50.0. n=1 → `standard_deviation=None`. Empty list and a mixed entes/circut
 raise `ValueError`. Note that this section raises the floor to **Python 3.10** (`float |
 None` is evaluated at import); CI pins 3.11 and the README now states the requirement.
 
-## 4. Result Management — not started
+## 4. Result Management
 
-Unique run IDs, metadata, on-disk archiving, retrieval and comparison of historical runs.
+**What it delivers.** `run_test(ammeter_type)` returns a `TestRunResult` — a UUID4 run ID,
+start and end timestamps, the resolved sampling configuration, every raw sample and the
+statistics. `src/testing/result_manager.py` archives it as one JSON file per run under
+`results/runs/<test_id>.json`, and reads runs back: `save_test_run`, `load_test_run`,
+`list_test_runs`, `compare_test_runs`.
+
+**Decisions.**
+
+- **One JSON file per run, named by run ID.** Human-readable and diffable, no index file to
+  fall out of step with the directory, and a UUID4 name means a run cannot overwrite another.
+  Timestamps are stored as ISO-8601 strings and parsed back to timezone-aware `datetime`s;
+  `load(save(r)) == r` holds exactly, tzinfo included.
+- **The whole run is archived, not just the summary.** The statistics can be recomputed from
+  the samples; the samples cannot be recovered from the statistics.
+- **`RESULTS_DIR` is resolved from `__file__`, not the working directory** (added in review).
+  As `Path("results/runs")` it was CWD-relative, and the failure was silent in the worst way:
+  run from anywhere but the repo root, `list_test_runs()` returned `[]` — indistinguishable
+  from an empty archive — while `save_test_run()` quietly began a second archive tree beside
+  the caller. This is ISS-15's twin; `config_path` still has it.
+- **Listing returns `RunSummary` objects ordered by start time** (added in review). It
+  previously returned bare UUID strings sorted lexicographically, which is an arbitrary order
+  with respect to when runs happened, and carried no device, time or sample count — so
+  choosing a run to retrieve meant opening every file. `RunSummary` projects only fields the
+  run already computed; the storage layer calculates no new statistics.
+- **One `ResultStoreError` for an archive that exists but will not read** (added in review).
+  Loading previously leaked five unrelated untyped exceptions — `JSONDecodeError` on a
+  truncated file, `KeyError` on a missing field, `TypeError` on an unexpected one, `ValueError`
+  on an unparseable timestamp — none of them a project type. A caller facing a damaged archive
+  takes the same action in every case, so the family is deliberately one class rather than a
+  hierarchy, and the message names the file and the cause. A run that was never archived stays
+  `FileNotFoundError`, which already says exactly that.
+- **Fields are reconstructed by name, not by `SamplingConfig(**data)`** (changed in review).
+  Splatting turned a field added by a later version into a `TypeError` in every older reader;
+  naming the fields ignores it instead.
+- **A damaged file fails a listing rather than being skipped.** Discovery that quietly drops
+  unreadable runs is how an archive rots unnoticed.
+- **`compare_test_runs` is presentation, not analysis.** It renders archived runs as a table
+  from numbers computed at archive time and calculates nothing across runs. A selection
+  spanning device types prints a warning instead of a combined figure: relative accuracy needs
+  [ISS-23](ISSUES.md#iss-23) resolved first and belongs to section 5.
+
+**What is committed, and what is ignored.** `results/runs/` is the working archive — machine
+written, UUID-named and unbounded — so it is gitignored along with `results/logs/`; committing
+it would put every local run into the diff and grow the repo without limit. `results/samples/`
+holds one curated run per device and *is* tracked, because sample test results are an
+assignment deliverable, they let a reviewer see the archive format without running anything,
+and fixed data makes the section 5 comparison and any committed plots reproducible. No code
+change was needed to write there: `results_dir` is already a parameter on every storage
+function. The ignore rule is `results/*` rather than `results/` because git does not descend
+into an excluded directory, so a `!results/samples/` negation under `results/` would never be
+reached.
+
+**The metrics stack does not change this.** Prometheus and Grafana are a separate bonus and
+are not a consumer of these files: the roadmap design pushes a finished run's statistics to a
+Pushgateway, Prometheus scrapes that, and Grafana reads from Prometheus — never from JSON on
+disk, and never from git. The two sinks also hold different things. Prometheus stores labelled
+metric series, not the raw per-sample readings with their own capture timestamps, so the JSON
+archive stays the system of record and Grafana is a derived view of it. That is also why the
+framework is required to produce complete results with the stack down. Matplotlib plots
+(section 3 bonus) read the local archive at runtime, likewise not the committed copy.
+
+**Known limits.** `save_test_run` writes in place, so a crash mid-write leaves a truncated
+file — caught cleanly on load now, but an atomic temp-file-plus-replace would prevent it.
+The archive carries no schema version. `result_management:` in `config.yaml` is still an empty
+key; the results path is a module constant while ports, commands and sampling are config-driven.
+`list_test_runs` loads each run in full to summarise it, which is irrelevant at this scale and
+would not be at thousands of runs.
+
+**Verified.** Round trip exact against a real archived run (`load(save(r)) == r`, tz-aware
+timestamps preserved). Discovery from a foreign working directory: 3 runs found, where the
+pre-fix code returned `[]`. Ordering proven on three runs whose IDs sort in the exact inverse
+of their start times — output is chronological. All six corruption cases (truncated JSON,
+missing `analysis`, missing `unit`, unparseable timestamp, null timestamp, unknown extra
+field) resolve as one `ResultStoreError` naming the file, except the extra field, which now
+loads by design; a missing run still raises `FileNotFoundError`. Mixed-device comparison
+emits its warning; empty comparison raises `ValueError`.
 
 ## 5. Accuracy Assessment (bonus) — not started
 

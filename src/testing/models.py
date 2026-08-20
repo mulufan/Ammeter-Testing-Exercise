@@ -1,4 +1,4 @@
-# SamplingConfig, Measurement (dataclasses only)
+# Measurement, SamplingConfig, AnalysisResult(dataclasses only)
 
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
@@ -74,3 +74,52 @@ class AnalysisResult:
             lines.append(f"  {label:<8} {rendered}")
 
         return "\n".join(lines)
+
+
+@dataclass(frozen=True)
+class TestRunResult:
+    """
+    Represents a complete ammeter test run, including its configuration,
+    collected measurements, analysis, and run metadata.
+    """
+    test_id: str
+    ammeter_type: str
+    started_at: datetime
+    completed_at: datetime
+    sampling_config: SamplingConfig
+    measurements: list[Measurement]
+    analysis: AnalysisResult
+
+
+@dataclass(frozen=True)
+class RunSummary:
+    """
+    One archived run reduced to the fields needed to choose between runs.
+
+    Every value here was computed when the run was archived; nothing is
+    recalculated from the raw samples. That keeps listing and comparison as
+    pure presentation over stored metadata, and keeps new statistics out of
+    the storage layer.
+    """
+    test_id: str
+    ammeter_type: str
+    started_at: datetime
+    sample_count: int
+    mean_current: float
+    standard_deviation: float | None
+    min_current: float
+    max_current: float
+
+    @classmethod
+    def from_test_run(cls, result: TestRunResult) -> "RunSummary":
+        """Project a loaded run onto its summary fields."""
+        return cls(
+            test_id=result.test_id,
+            ammeter_type=result.ammeter_type,
+            started_at=result.started_at,
+            sample_count=result.analysis.sample_count,
+            mean_current=result.analysis.mean_current,
+            standard_deviation=result.analysis.standard_deviation,
+            min_current=result.analysis.min_current,
+            max_current=result.analysis.max_current,
+        )

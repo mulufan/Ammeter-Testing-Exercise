@@ -1,0 +1,52 @@
+{
+  "test_id": "fd05d27b-e7ed-4c8d-91ac-6a2333e20898",
+  "ammeter_type": "greenlee",
+  "started_at": "2026-08-20T17:43:43.863991+00:00",
+  "completed_at": "2026-08-20T17:43:45.870998+00:00",
+  "sampling_config": {
+    "measurements_count": 5,
+    "total_duration_seconds": 2,
+    "sampling_frequency_hz": 2
+  },
+  "measurements": [
+    {
+      "ammeter_type": "greenlee",
+      "current": 0.11276997093723579,
+      "unit": "A",
+      "timestamp": "2026-08-20T17:43:43.865792+00:00"
+    },
+    {
+      "ammeter_type": "greenlee",
+      "current": 0.12224268972527184,
+      "unit": "A",
+      "timestamp": "2026-08-20T17:43:44.370165+00:00"
+    },
+    {
+      "ammeter_type": "greenlee",
+      "current": 0.019221652448447587,
+      "unit": "A",
+      "timestamp": "2026-08-20T17:43:44.883263+00:00"
+    },
+    {
+      "ammeter_type": "greenlee",
+      "current": 0.12344268634765866,
+      "unit": "A",
+      "timestamp": "2026-08-20T17:43:45.369275+00:00"
+    },
+    {
+      "ammeter_type": "greenlee",
+      "current": 0.07176260921716991,
+      "unit": "A",
+      "timestamp": "2026-08-20T17:43:45.870998+00:00"
+    }
+  ],
+  "analysis": {
+    "ammeter_type": "greenlee",
+    "sample_count": 5,
+    "mean_current": 0.08988792173515676,
+    "median_current": 0.11276997093723579,
+    "standard_deviation": 0.044773289985094174,
+    "min_current": 0.019221652448447587,
+    "max_current": 0.12344268634765866
+  }
+}
