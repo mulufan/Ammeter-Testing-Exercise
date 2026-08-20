@@ -1,0 +1,52 @@
+{
+  "test_id": "03e43979-403b-42d4-b1b7-3cec4f1fb23e",
+  "ammeter_type": "circutor",
+  "started_at": "2026-08-20T17:43:47.900103+00:00",
+  "completed_at": "2026-08-20T17:43:49.898954+00:00",
+  "sampling_config": {
+    "measurements_count": 5,
+    "total_duration_seconds": 2,
+    "sampling_frequency_hz": 2
+  },
+  "measurements": [
+    {
+      "ammeter_type": "circutor",
+      "current": 0.03190463617332494,
+      "unit": "A",
+      "timestamp": "2026-08-20T17:43:47.927168+00:00"
+    },
+    {
+      "ammeter_type": "circutor",
+      "current": 0.022577330010758873,
+      "unit": "A",
+      "timestamp": "2026-08-20T17:43:48.409537+00:00"
+    },
+    {
+      "ammeter_type": "circutor",
+      "current": 0.03547301525501157,
+      "unit": "A",
+      "timestamp": "2026-08-20T17:43:48.911851+00:00"
+    },
+    {
+      "ammeter_type": "circutor",
+      "current": 0.04639546720172616,
+      "unit": "A",
+      "timestamp": "2026-08-20T17:43:49.410978+00:00"
+    },
+    {
+      "ammeter_type": "circutor",
+      "current": 0.06425973208802264,
+      "unit": "A",
+      "timestamp": "2026-08-20T17:43:49.898954+00:00"
+    }
+  ],
+  "analysis": {
+    "ammeter_type": "circutor",
+    "sample_count": 5,
+    "mean_current": 0.040122036145768834,
+    "median_current": 0.03547301525501157,
+    "standard_deviation": 0.015960420369841615,
+    "min_current": 0.022577330010758873,
+    "max_current": 0.06425973208802264
+  }
+}

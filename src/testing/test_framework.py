@@ -1,14 +1,14 @@
 import math
 import time
 import statistics
-
-from typing import Dict
+from uuid import uuid4
 
 from Ammeters.client import request_current_from_ammeter
 from Ammeters.client import AmmeterConnectionError, AmmeterResponseError
 
-from src.testing.models import (Measurement, SamplingConfig, AnalysisResult)
 from src.utils.config import load_config
+from src.testing.models import (Measurement, SamplingConfig, AnalysisResult, TestRunResult, utc_now)
+
 
 
 # Absolute tolerance for comparing configured and derived sampling parameters.
@@ -37,8 +37,27 @@ class AmmeterTestFramework:
     def __init__(self, config_path: str = "config/config.yaml"):
         self.config = load_config(config_path)
 
-    def run_test(self, ammeter_type: str) -> Dict:
-        pass
+    def run_test(self, ammeter_type: str) -> TestRunResult:
+        ammeter_type = ammeter_type.lower()
+
+        test_id = str(uuid4())
+        started_at = utc_now()
+
+        sampling_config = self._get_sampling_config()
+        measurements = self.collect_samples(ammeter_type)
+        analysis = self.analyze_measurements(measurements)
+
+        completed_at = utc_now()
+
+        return TestRunResult(
+        test_id=test_id,
+        ammeter_type=ammeter_type,
+        started_at=started_at,
+        completed_at=completed_at,
+        sampling_config=sampling_config,
+        measurements=measurements,
+        analysis=analysis,
+    )
 
     def _get_sampling_config(self) -> SamplingConfig:
         """

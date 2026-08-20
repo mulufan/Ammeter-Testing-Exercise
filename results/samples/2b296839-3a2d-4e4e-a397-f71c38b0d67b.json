@@ -1,0 +1,52 @@
+{
+  "test_id": "2b296839-3a2d-4e4e-a397-f71c38b0d67b",
+  "ammeter_type": "entes",
+  "started_at": "2026-08-20T17:43:45.875016+00:00",
+  "completed_at": "2026-08-20T17:43:47.897189+00:00",
+  "sampling_config": {
+    "measurements_count": 5,
+    "total_duration_seconds": 2,
+    "sampling_frequency_hz": 2
+  },
+  "measurements": [
+    {
+      "ammeter_type": "entes",
+      "current": 26.7325391568893,
+      "unit": "A",
+      "timestamp": "2026-08-20T17:43:45.875016+00:00"
+    },
+    {
+      "ammeter_type": "entes",
+      "current": 51.7507343651886,
+      "unit": "A",
+      "timestamp": "2026-08-20T17:43:46.379037+00:00"
+    },
+    {
+      "ammeter_type": "entes",
+      "current": 20.519210429356914,
+      "unit": "A",
+      "timestamp": "2026-08-20T17:43:46.895516+00:00"
+    },
+    {
+      "ammeter_type": "entes",
+      "current": 119.77127965653992,
+      "unit": "A",
+      "timestamp": "2026-08-20T17:43:47.394898+00:00"
+    },
+    {
+      "ammeter_type": "entes",
+      "current": 63.9676834986673,
+      "unit": "A",
+      "timestamp": "2026-08-20T17:43:47.896854+00:00"
+    }
+  ],
+  "analysis": {
+    "ammeter_type": "entes",
+    "sample_count": 5,
+    "mean_current": 56.548289421328406,
+    "median_current": 51.7507343651886,
+    "standard_deviation": 39.56729689438715,
+    "min_current": 20.519210429356914,
+    "max_current": 119.77127965653992
+  }
+}
