@@ -82,8 +82,8 @@ python -m compileall -q main.py Ammeters src examples scripts
 python scripts/ci_import_check.py
 ```
 
-The import check is currently reported but not enforced — `master` still contains a known
-import failure (`src/testing/test_framework.py`, ISS-05 in [`ISSUES.md`](ISSUES.md)). Once
-that fix lands on `master`, drop `continue-on-error` from the workflow so the step blocks
-merges. Tests are not part of CI yet; when `pytest` arrives it is added as one more step
-after the import check.
+Both checks now block a merge. The import check was reported without enforcing while
+`master` still carried the ISS-05 import failure (`src/testing/test_framework.py`, see
+[`ISSUES.md`](ISSUES.md)); that fix has landed, so `continue-on-error` is gone. Tests are
+not part of CI yet; when `pytest` arrives it is added as one more step after the import
+check.
