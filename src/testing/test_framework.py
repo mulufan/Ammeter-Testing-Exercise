@@ -7,7 +7,7 @@ from Ammeters.client import request_current_from_ammeter
 from Ammeters.client import AmmeterConnectionError, AmmeterResponseError
 
 from src.utils.config import load_config
-from src.testing.models import (Measurement, SamplingConfig, AnalysisResult, TestRunResult, utc_now)
+from src.testing.models import (Measurement, SamplingConfig, AnalysisResult, TestRunResult, PrecisionResult, utc_now)
 
 
 
@@ -217,3 +217,122 @@ class AmmeterTestFramework:
             min_current=min(current_values),
             max_current=max(current_values),
         )
+
+    def evaluate_precision(self, analysis: AnalysisResult) -> PrecisionResult:
+        """
+        Evaluate the relative variability of one run using the coefficient of
+        variation. A lower CV means the readings sat closer together relative to
+        their own mean; it says nothing about how close they sat to the truth.
+
+        Dividing by the mean is what makes the figure comparable at all here:
+        the three devices read three orders of magnitude apart, so a raw standard
+        deviation ranks them by magnitude rather than by consistency.
+
+        The CV is left undefined at a zero mean, and at a single sample where
+        there is no standard deviation to divide.
+        """
+        if analysis.standard_deviation is None or analysis.mean_current == 0:
+            coefficient_of_variation = None
+        else:
+            coefficient_of_variation = (
+                analysis.standard_deviation / abs(analysis.mean_current)
+            )
+
+        return PrecisionResult(
+            ammeter_type=analysis.ammeter_type,
+            sample_count=analysis.sample_count,
+            mean_current=analysis.mean_current,
+            standard_deviation=analysis.standard_deviation,
+            coefficient_of_variation=coefficient_of_variation,
+        )
+
+    def rank_precision(
+        self, precision_results: list[PrecisionResult]
+    ) -> list[PrecisionResult]:
+        """
+        Order runs by relative variability, least variable first.
+
+        Runs with no comparable CV are kept and sorted to the end rather than
+        dropped. Discarding them would silently shrink the report - a device
+        sampled once would simply not appear, with nothing in the output saying
+        a device was missing.
+
+        The first key element partitions the undefined ones out, so the second
+        never has to discriminate within that group.
+        """
+        return sorted(
+            precision_results,
+            key=lambda result: (
+                result.coefficient_of_variation is None,
+                result.coefficient_of_variation or 0.0,
+            ),
+        )
+
+    def compare_precision(self, precision_results: list[PrecisionResult]) -> str:
+        """
+        Render every device's relative variability as one ranked table.
+
+        The closing note is part of the result, not decoration. Read bare, a
+        ranked table headed by a device name invites the conclusion that the
+        winner is the better instrument, which is exactly what these numbers
+        cannot establish.
+        """
+        if not precision_results:
+            raise ValueError("Nothing to compare: no precision results given.")
+
+        ranked_results = self.rank_precision(precision_results)
+
+        # Header and rows share these widths so the two cannot drift apart; they
+        # were previously written out by hand and every column sat one character
+        # off from the values underneath it.
+        columns = (
+            ("Ammeter", 11),
+            ("Samples", 12),
+            ("Mean (A)", 13),
+            ("Std Dev", 12),
+            ("CV (%)", 8),
+        )
+
+        lines = [
+            "".join(title.ljust(width) for title, width in columns).rstrip(),
+            "-" * sum(width for _, width in columns),
+        ]
+
+        for result in ranked_results:
+            cells = (
+                result.ammeter_type,
+                str(result.sample_count),
+                # Six significant figures, matching AnalysisResult.__str__: a
+                # fixed decimal count renders every CIRCUTOR statistic as 0.01.
+                format(result.mean_current, ".6g"),
+                "N/A" if result.standard_deviation is None
+                else format(result.standard_deviation, ".6g"),
+                "N/A" if result.coefficient_of_variation is None
+                else f"{result.coefficient_of_variation * 100:.2f}",
+            )
+
+            lines.append(
+                "".join(
+                    cell.ljust(width) for cell, (_, width) in zip(cells, columns)
+                ).rstrip()
+            )
+
+        lines.append("")
+        lines.append(
+            "This ranks relative variability, not accuracy. The devices share no "
+            "reference current, so there is no truth here to measure against and "
+            "no device is shown to read correctly."
+        )
+        lines.append(
+            "Each emulator also redraws its physical parameters on every call, so "
+            "consecutive samples are independent draws rather than repeated reads "
+            "of one current. These CVs describe the spread of each device's model, "
+            "not the repeatability of an instrument."
+        )
+        lines.append(
+            "A CV computed from few samples is itself unstable, and the ordering "
+            "it produces can invert between runs. Raise the sample count before "
+            "reading anything into a narrow gap."
+        )
+
+        return "\n".join(lines)
