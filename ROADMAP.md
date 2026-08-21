@@ -1,6 +1,6 @@
 # Roadmap
 
-A living document. Check items off as they ship. Last updated: 2026-08-20.
+A living document. Check items off as they ship. Last updated: 2026-08-21.
 
 Milestones 1–5 are the five sections of the assignment's Problem Statement, in its order and
 under its names. Milestone 0 (fixing the supplied code) and Milestone 6 (documentation) are
@@ -73,11 +73,13 @@ consistently.*
 - [x] Statistics over a mixed-device list rejected, and the device recorded on the result —
       the three emulators read in different magnitudes, so a statistic spanning them is
       meaningless — ISS-23
-- [x] Run summary printed in a clear, readable format — `AnalysisResult.__str__`, called per
-      device from `main.py`; six significant figures, since the devices read orders of
-      magnitude apart
+- [x] Run summary printed in a clear, readable format — `AnalysisResult.__str__`; six
+      significant figures, since the devices read orders of magnitude apart. Milestone 5
+      replaced the per-device sweep in `main.py` with the comparison table, so median, min
+      and max are archived but no longer printed to the console
 - [ ] *(Bonus)* Measurement series over time and per-device distribution plots saved with the run
-- [ ] *(Bonus)* Performance consistency evaluated with a named variability metric
+- [x] *(Bonus)* Performance consistency evaluated with a named variability metric —
+      coefficient of variation, delivered with Milestone 5
 - [ ] **Observability:** the five statistics pushed as labelled gauges, with a provisioned Grafana dashboard panel for each
 
 ## 🟡 Milestone 4 — Result Management
@@ -94,15 +96,23 @@ consistently.*
       run, path resolved from the project root; JSON only, no CSV export
 - [ ] **Observability:** run ID travels as a label, grouping keys chosen so a new run cannot overwrite the previous one, label cardinality documented
 
-## ⬜ Milestone 5 — Accuracy Assessment *(bonus)*
+## 🟡 Milestone 5 — Accuracy Assessment *(bonus)*
 
 *Goal: compare measurements across ammeter types and quantify precision.*
 
-- [ ] Runs from different device types compared in a single report
-- [ ] The differing magnitudes across devices handled explicitly — normalised, or an agreed reference stated — ISS-23
-- [ ] Relative accuracy quantified per device
-- [ ] Precision quantified using a named statistical technique
-- [ ] Most reliable measurement method identified, with the reasoning recorded
+- [x] Runs from different device types compared in a single report — `compare_precision`
+      renders every device as one ranked table, printed by `main.py`
+- [x] The differing magnitudes across devices handled explicitly — normalised, or an agreed
+      reference stated — ISS-23; normalised by dividing the standard deviation by the mean,
+      and the report states that no reference current exists
+- [ ] Relative accuracy quantified per device — **not delivered, by design.** The emulators
+      expose no shared reference current, so any accuracy figure would measure against an
+      invented truth. Precision is reported instead and the report says which it is
+- [x] Precision quantified using a named statistical technique — coefficient of variation
+      (`stdev / |mean|`), standard library only
+- [ ] Most reliable measurement method identified, with the reasoning recorded — devices are
+      ranked, but no winner is declared: at the default 5 samples the gaps are smaller than
+      the sampling noise, and a separability test was cut as over-engineering
 - [ ] **Observability:** cross-device dashboard on shared normalised axes, with a side-by-side precision panel
 
 ## ⬜ Milestone 6 — Documentation & polish

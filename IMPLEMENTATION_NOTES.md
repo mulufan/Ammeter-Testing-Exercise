@@ -185,8 +185,11 @@ library `statistics` only.
   return `[]` when every read fails, and a result full of zeros would archive as though
   the run had succeeded.
 
-**Reporting.** `AnalysisResult.__str__` renders the run as a labelled block, and `main.py`
-prints one per device. Values are formatted to six significant figures rather than a fixed
+**Reporting.** `AnalysisResult.__str__` renders the run as a labelled block. `main.py`
+printed one per device until section 5 replaced that sweep with the cross-device comparison
+table; the block is still what the archive and `examples/` render, and the mean and standard
+deviation survive into the comparison, but median, min and max no longer reach the console.
+Values are formatted to six significant figures rather than a fixed
 decimal count: the devices read three orders of magnitude apart, so `%.2f` would show every
 CIRCUTOR statistic as `0.01`. An undefined standard deviation prints as
 `n/a (needs 2+ samples)`, never as a number.
@@ -279,12 +282,125 @@ field) resolve as one `ResultStoreError` naming the file, except the extra field
 loads by design; a missing run still raises `FileNotFoundError`. Mixed-device comparison
 emits its warning; empty comparison raises `ValueError`.
 
-## 5. Accuracy Assessment (bonus) — not started
+## 5. Accuracy Assessment (bonus) — delivered as precision only
 
-Cross-device comparison has to confront [ISS-23](ISSUES.md#iss-23) first: the three
-emulators produce non-comparable magnitudes (roughly 0.4 A / 85 A / 0.026 A in one sweep),
-so they are not measuring a shared current and a naive accuracy comparison would be
-meaningless without normalisation or a stated reference.
+**What it delivers.** `evaluate_precision(analysis)` reduces an `AnalysisResult` to a
+`PrecisionResult` — device, sample count, mean, standard deviation and coefficient of
+variation. `rank_precision` orders those least-variable-first, and `compare_precision`
+renders every device as one ranked table with the caveats that make it readable. `main.py`
+sweeps the config registry and prints that table.
+
+**The central decision: precision, not accuracy.** The section is named *Accuracy
+Assessment*, and the accuracy half is deliberately not implemented. Accuracy is distance
+from a true value; the three emulators expose no shared reference current, and they are not
+measuring one physical quantity ([ISS-23](ISSUES.md#iss-23)). Any accuracy figure would
+have required inventing the truth it was measuring against. What *can* be quantified
+honestly is dispersion, so that is what the section reports, and the report says so in as
+many words rather than leaving a reader to infer it.
+
+**Why the coefficient of variation.** `stdev / |mean|` is dimensionless, which is the whole
+point: the devices read three orders of magnitude apart, so ranking on raw standard
+deviation ranks them by magnitude rather than by consistency. CV is the standard named
+technique for exactly this — comparing dispersion between variables on different scales —
+which also satisfies the "named statistical technique" requirement without adding a
+dependency. Section 3 already chose the sample standard deviation (n−1) partly in
+anticipation of this, so no bias is inherited here.
+
+**Decisions.**
+
+- **`sample_count` travels on `PrecisionResult`** (added in review). A CV from 5 samples and
+  a CV from 500 are not comparable evidence, and without the count nothing downstream —
+  including a human reading the table — can tell them apart.
+- **Undefined CVs stay in the ranking** (changed in review). `rank_precision` first sorted
+  the comparable results and returned only those, so a device sampled once vanished from the
+  report with nothing saying a device was missing. It now sorts on
+  `(cv is None, cv or 0.0)`, which partitions the undefined ones to the end and keeps them
+  visible as `N/A`. Same principle as `list_test_runs` refusing to skip damaged runs.
+- **The caveats are part of the report, not of the documentation.** `compare_precision`
+  appends three notes: that this ranks variability and not accuracy, that the spread belongs
+  to each device's model rather than to an instrument, and that a CV from few samples is
+  unstable. A ranked table headed by a device name invites "the winner is the better
+  instrument" — the one conclusion these numbers cannot support — and a caveat that lives
+  only in a Markdown file does not travel with the output. `compare_test_runs` set the
+  precedent in section 4.
+- **No "most reliable device" is declared.** The roadmap item asks for one. Ranking is
+  reported and naming a winner is not, because at the sample counts a default run collects
+  the gaps are routinely smaller than the noise (below). Declaring a winner would need a
+  separability test, which was considered and cut as over-engineering for a bonus section.
+- **Table headers are generated from the column widths.** They were written out by hand and
+  every header sat one character right of its own column.
+
+**The limitation that shapes the whole section.** These emulators redraw their physical
+parameters on *every* call, so consecutive samples are independent draws from a random
+model, not repeated readings of one current. Precision in metrology is measured under
+repeatability conditions — same measurand, repeated reads — and this setup cannot provide
+them without modifying the emulators. So the CV here describes the spread of each device's
+generator, and the resulting order is a fixed property of those generators rather than a
+finding about hardware. CIRCUTOR always wins because `sum` over 10 terms averages variance
+down by √10; Greenlee always loses because `V/R` with `R∈[0.1,100]` is a heavy-tailed ratio
+distribution. Simulating the three models over 200 000 draws gives the true values:
+
+| Device | Model | True CV |
+| --- | --- | --- |
+| CIRCUTOR | Σ(V·Δt), 10 terms | 0.222 |
+| ENTES | B·K | 0.607 |
+| Greenlee | V/R | 5.007 |
+
+**Sample count is what makes the ranking mean anything.** With `measurements_count: 5` the
+sampling distribution of the sample CV is so wide that all three devices overlap, and an
+observed sweep gave entes 51.19%, circutor 51.25%, greenlee 52.14% — a spread of under one
+percentage point, and an order (`entes < circutor < greenlee`) that is *wrong* against the
+true values above. 90% ranges from 20 000 simulated runs per device:
+
+| Device | n=5 | n=50 |
+| --- | --- | --- |
+| CIRCUTOR | [0.096, 0.344] | [0.185, 0.259] |
+| ENTES | [0.287, 0.907] | [0.520, 0.698] |
+| Greenlee | [0.375, 1.937] | [1.084, 4.759] |
+
+At n=50 the ranges are disjoint and the order is stable and correct. The configured default
+is still 5, which is a demo-speed choice rather than a measurement choice; the third caveat
+in the report warns against reading a narrow gap, and raising the count to
+`50 / 4.9 s / 10 Hz` is the fix when the number needs to mean something. Greenlee's CV stays
+conservative even at n=500 (median 3.97 against a true 5.007) because of that tail — the
+ordering is right, the magnitude is understated.
+
+**Rejected alternatives.**
+
+- **Analytic reference currents, and bias against them.** Each emulator's expected value is
+  exactly derivable — Greenlee `5.5·ln(1000)/99.9 = 0.380307 A`, ENTES `0.055·1250 =
+  68.75 A`, CIRCUTOR `10·0.55·0.0055 = 0.03025 A` — which would have made
+  `(mean − reference)/reference` a real accuracy figure and ticked the roadmap's *relative
+  accuracy* box. Rejected: it measures whether the sampling pipeline reproduces a
+  distribution the emulator declares, which is a self-consistency check dressed as accuracy.
+  A reader would take a "bias" column as a statement about the device. The honest version
+  needs a reference the device does not supply.
+- **Standard error on the CV** (`CV/√(2(n−1))`), to mark two devices as indistinguishable.
+  Correct in principle and the right long-term answer, but it is the normal approximation and
+  these distributions are skewed enough that it would be optimistic where it matters most.
+  Raising the sample count solves the same problem without shipping a number that is wrong
+  in the Greenlee case.
+- **A `Protocol` so archived `RunSummary` objects feed the assessment directly.** Deferred.
+  It is the right seam once cross-run comparison is wanted; today every caller has an
+  `AnalysisResult` in hand and the abstraction would have no second implementation.
+- **A separate `src/testing/accuracy.py`.** The three methods sit on `AmmeterTestFramework`
+  next to `analyze_measurements`, which is where a caller looks for them. Worth splitting out
+  if the section grows.
+
+**Known limits.** No accuracy, by design. No winner is named. `main.py` no longer prints the
+per-device `AnalysisResult` block — median, min and max are computed and archived but absent
+from the console sweep, which now shows only the comparison table. The report is text only;
+the visualisation bonus is unstarted.
+
+**Verified.** A full sweep with all three emulators alive ranks entes 27.32%, greenlee
+57.42%, circutor 57.84% at n=5 — the near-tie the caveat warns about. Running on a
+non-UTF-8 Windows console, where Greenlee's thread dies on [ISS-24](ISSUES.md#iss-24), now
+prints `Skipping greenlee: …` and still produces the table for the other two; before the
+`except (AmmeterError, ValueError)` guard the same command died with an unhandled
+`AmmeterConnectionError` and printed nothing at all. `compare_precision([])` raises
+`ValueError`. A device with `standard_deviation=None` renders as `N/A` and sorts last; a
+device with `CV=0.0` sorts first rather than being confused with an undefined one. Columns
+line up under their headers. `compileall` and `scripts/ci_import_check.py` both clean.
 
 ---
 
@@ -314,9 +430,12 @@ workflow marks where the `pytest` step goes when Stage 3 produces real tests.
   together rather than half in two places.
 - `main.py` still hardcodes the ports it *binds*, so `config.yaml` is the single source of
   truth for the client half only ([ISS-08](ISSUES.md#iss-08)).
-- `main.py` keeps the supplied `sleep(5)` and trailing `pass`; removing them needs a
-  readiness signal and a shutdown path ([ISS-10](ISSUES.md#iss-10),
+- `main.py` keeps the supplied `sleep(5)`; the trailing `pass` is gone, but removing the
+  sleep needs a readiness signal and a shutdown path ([ISS-10](ISSUES.md#iss-10),
   [ISS-18](ISSUES.md#iss-18)), not just deletion.
+- The default `measurements_count: 5` is a demo-speed setting, not a measurement one: at
+  n=5 the coefficient of variation is too noisy to separate the three devices (section 5).
+  Raising it to `50 / 4.9 s / 10 Hz` is the fix when the ranking needs to mean something.
 - `AmmeterResponseError` names the port but not the offending payload — recoverable from the
   chained traceback, absent from the line an operator actually reads.
 - ISS-24 (the `Ω` print) is unfixed; Greenlee needs `PYTHONIOENCODING=utf-8` on a non-UTF-8
