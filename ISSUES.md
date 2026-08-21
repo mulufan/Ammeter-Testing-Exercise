@@ -6,8 +6,8 @@ error in the code, please fix it, and explain the fix in the documentation."* Th
 is the catalogue of what is wrong. Each fix, once applied, is explained in
 `IMPLEMENTATION_NOTES.md`.
 
-Last updated: 2026-08-18. **Status: ISS-01, ISS-02, ISS-04, ISS-05, ISS-07, ISS-08 and
-ISS-12 fixed. ISS-19 partially addressed. Everything else still open.**
+Last updated: 2026-08-21. **Status: ISS-01, ISS-02, ISS-04, ISS-05, ISS-07, ISS-08,
+ISS-12 and ISS-23 fixed. ISS-19 partially addressed. Everything else still open.**
 
 **Severity:** 🔴 Blocker (nothing works until fixed) · 🟠 High (wrong or misleading
 behaviour) · 🟡 Medium (fragile, will bite under load or on another OS) · ⚪ Low (polish)
@@ -42,7 +42,7 @@ behaviour) · 🟡 Medium (fragile, will bite under load or on another OS) · �
 | [ISS-20](#iss-20) | Protocol | Reply has no framing or delimiter | 🟡 | ☐ |
 | [ISS-21](#iss-21) | `requirements.txt` | Five heavy dependencies, only one is imported | 🟡 | ☐ |
 | [ISS-22](#iss-22) | Emulators | Unconditional `print()` on every measurement | ⚪ | ☐ |
-| [ISS-23](#iss-23) | Design | Devices produce non-comparable magnitudes | 🟡 | ☐ |
+| [ISS-23](#iss-23) | Design | Devices produce non-comparable magnitudes | 🟡 | ☑ |
 | [ISS-24](#iss-24) | `Greenlee_Ammeter.py` | `Ω` in `print()` kills the thread on a non-UTF-8 console | 🔴 | ☐ |
 
 ---
@@ -614,6 +614,15 @@ being measured.
 
 *Not strictly a bug* — but it constrains the design of Milestone 5 and must be handled
 explicitly rather than papered over.
+
+*Resolved in Milestone 5.* Two ways, both explicit. Dispersion is normalised by dividing the
+standard deviation by the mean, so the coefficient of variation is dimensionless and the
+magnitude gap stops mattering. Accuracy is not reported at all, because no shared reference
+current exists to report it against — and `compare_precision` states that in its output
+rather than leaving a ranked table to imply otherwise. Section 3 had already closed the other
+half by rejecting statistics over a mixed-device list. The CIRCUTOR Riemann-sum observation
+stands: it is the reason CIRCUTOR shows the lowest variability of the three, since summing
+ten terms averages the spread down by √10.
 
 ---
 

@@ -123,3 +123,27 @@ class RunSummary:
             min_current=result.analysis.min_current,
             max_current=result.analysis.max_current,
         )
+
+
+@dataclass(frozen=True)
+class PrecisionResult:
+    """
+    The relative variability of one ammeter run.
+
+    A lower coefficient of variation means the readings sat closer together
+    relative to their own mean. It is deliberately not called better precision:
+    these emulators redraw their physical parameters on every call, so the
+    spread being measured belongs to the device's model rather than to an
+    instrument's repeatability, and no reading here is checked against a truth.
+
+    `coefficient_of_variation` is `stdev / |mean|` - dimensionless, so it
+    survives the magnitude gap between devices - and None where it would be
+    undefined. `sample_count` travels with it because a CV from 5 samples and
+    one from 500 are not comparable evidence, and nothing downstream could tell
+    them apart otherwise.
+    """
+    ammeter_type: str
+    sample_count: int
+    mean_current: float
+    standard_deviation: float | None
+    coefficient_of_variation: float | None
