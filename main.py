@@ -38,25 +38,26 @@ if __name__ == "__main__":
 
     framework = AmmeterTestFramework()
 
-    # Sample every device in the config registry, so adding one is still a YAML edit.
+    # Driven off the config registry, so adding a device stays a YAML edit.
+    precision_results = []
+
     for ammeter_type in framework.config["ammeters"]:
-        print(f"\n--- {ammeter_type} ---")
-
         try:
-            measurements = framework.collect_samples(ammeter_type)
-        except AmmeterError as exc:
-            # One unreachable device must not cost the other two their samples.
-            print(f"Sampling failed: {exc}")
-            continue
+            result = framework.run_test(ammeter_type)
+            precision = framework.evaluate_precision(result.analysis)
+            precision_results.append(precision)
 
-        for measurement in measurements:
-            print(measurement)
+        # AmmeterError: the device could not be reached or replied unusably.
+        # ValueError: it was reached but yielded nothing to analyse, because
+        # every sample was skipped on a bad reply. Either way one bad device
+        # must not cost the others their run.
+        except (AmmeterError, ValueError) as exc:
+            print(f"Skipping {ammeter_type}: {exc}")
 
-        if not measurements:
-            # Every sample was skipped on a bad reply; there is nothing to analyse.
-            print("No samples collected, skipping analysis.")
-            continue
-
+    # Every device failed; there is nothing to rank and nothing to report.
+    if not precision_results:
+        print("\nNo device produced measurements, so there is nothing to compare.")
+    else:
         print()
-        print(framework.analyze_measurements(measurements))
-    pass
+        print("PRECISION COMPARISON")
+        print(framework.compare_precision(precision_results))
