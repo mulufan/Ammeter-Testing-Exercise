@@ -5,16 +5,18 @@ the way. Organised by the sections of `Exam/ammeter-test-specification.md`, not 
 Individual bugs are catalogued in [`ISSUES.md`](ISSUES.md); this file records what was
 *done* about them and why.
 
-**Dependencies beyond the standard library: none at runtime.** `pytest` and `pytest-cov`
-are development-only, for the suite under `tests/` and the CI coverage gate — see
-*Supporting work — the test suite*.
+**Dependencies beyond the standard library: `matplotlib`, plus the supplied `pyyaml`.**
+`pyyaml` came with the project and loads `config/config.yaml`. `matplotlib` is the only one
+this work added, for the measurement-series plot — see *3. Result Analysis*, "Visualization".
+Everything else is standard library. `pytest` and `pytest-cov` are development-only, for the
+suite under `tests/` and the CI coverage gate — see *Supporting work — the test suite*.
 
 | Assignment section | State |
 | --- | --- |
 | Groundwork — make the supplied code run | done |
 | 1. Unified Measurement API | done |
 | 2. Measurement Sampling | done |
-| 3. Result Analysis | done |
+| 3. Result Analysis | done, incl. the measurement-series plot (bonus) |
 | 4. Result Management | done |
 | 5. Accuracy Assessment (bonus) | precision only — accuracy not delivered, by design |
 
@@ -227,12 +229,49 @@ decimal count: the devices read three orders of magnitude apart, so `%.2f` would
 CIRCUTOR statistic as `0.01`. An undefined standard deviation prints as
 `n/a (needs 2+ samples)`, never as a number.
 
+**Visualization (bonus).** `src/testing/visualization.py` renders one plot per run:
+`plot_measurement_series(result)` draws measured current against the timestamp of each
+sample and saves it as `results/runs/<test_id>.png`, beside that run's JSON archive and
+under the same ID. `main.py` archives and then plots every completed run.
+
+- **One chart type, one function.** A line with point markers, a title naming the device and
+  the short run ID, labelled axes and a grid. Distribution plots, comparison charts across
+  devices and anything interactive were left out: the assignment asks for the measurement
+  series, and a second chart type would need the magnitude problem in
+  [ISS-23](ISSUES.md#iss-23) answered before it could put two devices on one pair of axes.
+- **The x-axis is the capture timestamp, not the sample index.** `Measurement.timestamp` is
+  recorded as close to the read as possible, so the spacing on the plot is the spacing that
+  actually happened — an overrun sample shows up as a wider gap. An index axis would draw
+  every run as evenly spaced regardless of what the sampler achieved.
+- **The `Agg` backend is selected before `pyplot` is imported.** These figures are only ever
+  written to a file, and the default interactive backend needs a display — without this the
+  module fails at *import* on CI and on any headless machine, which would take `main.py` down
+  with it. Selecting it after importing `pyplot` has no effect, hence the import order and
+  the `noqa` on it.
+- **An empty measurement list raises `ValueError`, matching `analyze_measurements`.**
+  `collect_samples` legitimately returns `[]` when every read fails, and a blank pair of axes
+  saved under a run ID would look like a run that had nothing to report rather than one that
+  failed.
+- **`plt.close(figure)` after every save.** pyplot keeps each figure it creates alive until
+  it is closed; a three-device run would otherwise leak three figures per process.
+
+`matplotlib>=3.4.0` is the one dependency this project added, and it was already listed in
+the supplied `requirements.txt`. It is a runtime import in `main.py`'s path, not an optional
+extra: the plot is a deliverable, and making it importable-or-skipped would hide a broken
+install behind a missing file.
+
 **Known limits.** The metric set is hardcoded; `analysis.statistical_metrics` in
 `config.yaml` is still unread. The unit from `Measurement` is dropped — `__str__` hardcodes
-`A`.
+`A`. The plot hardcodes its axis labels and chart type the same way:
+`analysis.visualization.plot_types` is still an unread empty key, and `enabled: true` is not
+consulted — a run always writes its PNG. Per-device distribution plots, the other half of the
+roadmap's visualization line, are not delivered.
 
 **Verified.** `[10, 20, 30, 40, 50]` → mean 30.0, median 30.0, stdev 15.811, min 10.0,
-max 50.0. n=1 → `standard_deviation=None`. Empty list and a mixed entes/circutor list both
+max 50.0. A full `python main.py` wrote three PNGs beside three JSON files under matching
+UUIDs (`46102b4b…`, `90c61e1c…`, `87003f3f…`), each opening as a real PNG with the device
+and short run ID in the title. A single-sample run plots; a run with no measurements raises
+`ValueError` and leaves no file behind. n=1 → `standard_deviation=None`. Empty list and a mixed entes/circutor list both
 raise `ValueError`. Note that this section raises the floor to **Python 3.10** (`float |
 None` is evaluated at import); CI pins 3.11 and the README now states the requirement.
 
@@ -242,7 +281,9 @@ None` is evaluated at import); CI pins 3.11 and the README now states the requir
 start and end timestamps, the resolved sampling configuration, every raw sample and the
 statistics. `src/testing/result_manager.py` archives it as one JSON file per run under
 `results/runs/<test_id>.json`, and reads runs back: `save_test_run`, `load_test_run`,
-`list_test_runs`, `compare_test_runs`.
+`list_test_runs`, `compare_test_runs`. `main.py` calls `save_test_run` for every completed
+run; until the section 3 plot needed a JSON file to sit beside, the archive was only ever
+written by hand or by the tests.
 
 **Decisions.**
 
@@ -540,7 +581,7 @@ coverage floor:
 pytest --cov=src --cov-report=term-missing --cov-fail-under=85
 ```
 
-38 tests, 98% coverage of `src/`, under two seconds. Four files, split by what they check:
+42 tests, 98% coverage of `src/`, under three seconds. Five files, split by what they check:
 
 | File | Covers |
 | --- | --- |
@@ -548,6 +589,7 @@ pytest --cov=src --cov-report=term-missing --cov-fail-under=85
 | `tests/test_analysis.py` | statistics over known values, the coefficient of variation, and the precision ranking |
 | `tests/test_result_manager.py` | the archive: save → load round trip, listing, comparison, and the damaged-archive errors |
 | `tests/test_run.py` | the sampling loop and one complete run, including per-sample error handling |
+| `tests/test_visualization.py` | the plot is written where the archive expects it under the run's ID, and a run with no samples is refused |
 
 **Decision — one seam is stubbed, and it is the socket.** `tests/test_run.py` monkeypatches
 `request_current_from_ammeter`, the single function in the framework that opens a connection,
