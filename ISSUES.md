@@ -6,8 +6,8 @@ error in the code, please fix it, and explain the fix in the documentation."* Th
 is the catalogue of what is wrong. Each fix, once applied, is explained in
 `IMPLEMENTATION_NOTES.md`.
 
-Last updated: 2026-08-21. **Status: ISS-01, ISS-02, ISS-04, ISS-05, ISS-07, ISS-08,
-ISS-12 and ISS-23 fixed. ISS-19 partially addressed. Everything else still open.**
+Last updated: 2026-08-22. **Status: ISS-01, ISS-02, ISS-04, ISS-05, ISS-07, ISS-08,
+ISS-12, ISS-23 and ISS-24 fixed. ISS-19 partially addressed. Everything else still open.**
 
 **Severity:** 🔴 Blocker (nothing works until fixed) · 🟠 High (wrong or misleading
 behaviour) · 🟡 Medium (fragile, will bite under load or on another OS) · ⚪ Low (polish)
@@ -43,7 +43,7 @@ behaviour) · 🟡 Medium (fragile, will bite under load or on another OS) · �
 | [ISS-21](#iss-21) | `requirements.txt` | Five heavy dependencies, only one is imported | 🟡 | ☐ |
 | [ISS-22](#iss-22) | Emulators | Unconditional `print()` on every measurement | ⚪ | ☐ |
 | [ISS-23](#iss-23) | Design | Devices produce non-comparable magnitudes | 🟡 | ☑ |
-| [ISS-24](#iss-24) | `Greenlee_Ammeter.py` | `Ω` in `print()` kills the thread on a non-UTF-8 console | 🔴 | ☐ |
+| [ISS-24](#iss-24) | `Greenlee_Ammeter.py` | `Ω` in `print()` kills the thread on a non-UTF-8 console | 🔴 | ☑ |
 
 ---
 
@@ -280,6 +280,21 @@ measurement path should not depend on the operator's locale.
 
 *Verify:* `python main.py` returns a Greenlee reading on a `cp1255`/`cp1252` console with
 no environment override.
+
+**☑ Fixed.** The console text reads `Resistance: {resistance} Ohm`; the inline comment on the
+line above uses `Ohm` too, so a future edit does not reintroduce the character by copying it.
+Verified as specified — `python main.py` on this machine's `cp1255` console, no
+`PYTHONIOENCODING`, five Greenlee samples and all three devices in the comparison table.
+
+Deliberately *not* done: reconfiguring `sys.stdout`, which would hide the class of bug rather
+than remove it, and catching the exception in the accept loop, which would keep the thread
+alive through a crash it should not be having — that error boundary belongs to ISS-18.
+
+**Two related faults survive this fix.** The `print()` is still unconditional (ISS-22), and
+the accept loop still has no error boundary (ISS-18), so *any* exception inside
+`measure_current()` — not just this one — remains fatal to the device for the life of the
+process. ISS-24 was one instance of that failure mode; it is the instance, not the mode, that
+is now closed.
 
 ---
 

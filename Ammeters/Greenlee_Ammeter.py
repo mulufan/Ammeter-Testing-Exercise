@@ -10,7 +10,10 @@ class GreenleeAmmeter(AmmeterEmulatorBase):
 
     def measure_current(self) -> float:
         voltage = generate_random_float(1.0, 10.0)  # Random voltage (1V - 10V)
-        resistance = generate_random_float(0.1, 100.0)  # Random resistance (0.1Ω - 100Ω)
+        resistance = generate_random_float(0.1, 100.0)  # Random resistance (0.1 Ohm - 100 Ohm)
         current = voltage / resistance
-        print(f"Greenlee Ammeter - Voltage: {voltage}V, Resistance: {resistance}Ω, Current: {current}A")
+        # "Ohm", not the U+03A9 sign: this line is written to whatever console the
+        # operator happens to have, and a non-UTF-8 code page (cp1255, cp1252, ...)
+        # raises UnicodeEncodeError here, out of the accept loop, killing the thread.
+        print(f"Greenlee Ammeter - Voltage: {voltage}V, Resistance: {resistance} Ohm, Current: {current}A")
         return current
