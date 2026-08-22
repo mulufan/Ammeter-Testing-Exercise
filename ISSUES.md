@@ -6,9 +6,9 @@ error in the code, please fix it, and explain the fix in the documentation."* Th
 is the catalogue of what is wrong. Each fix, once applied, is explained in
 `IMPLEMENTATION_NOTES.md`.
 
-Last updated: 2026-08-22. **Status: ISS-01, ISS-02, ISS-04, ISS-05, ISS-07, ISS-08,
-ISS-12, ISS-23 and ISS-24 fixed. ISS-13 and ISS-19 partially addressed. Everything else in
-the must-fix list still open.**
+Last updated: 2026-08-22. **Status: ISS-01, ISS-02, ISS-04, ISS-05, ISS-07, ISS-08, ISS-09,
+ISS-12, ISS-22, ISS-23 and ISS-24 fixed. ISS-13 and ISS-19 partially addressed. Still open in
+the must-fix list: ISS-03 (partial), ISS-06, ISS-10, ISS-11, ISS-14, ISS-16 and ISS-21.**
 
 **Severity:** 🔴 Blocker (nothing works until fixed) · 🟠 High (wrong or misleading
 behaviour) · 🟡 Medium (fragile, will bite under load or on another OS) · ⚪ Low (polish)
@@ -50,7 +50,7 @@ Two entries the first pass of this triage put in the deferred pile were pulled b
 | [ISS-06](#iss-06) | `run_tests.py` | `run_test()` called with no argument | 🔴 | ☐ |
 | [ISS-07](#iss-07) | README | CIRCUTOR command documented without `-current` | 🟠 | ☑ |
 | [ISS-08](#iss-08) | `config.yaml` | Entire `ammeters:` block commented out | 🟠 | ☑ |
-| [ISS-09](#iss-09) | `logger.py` | Logger never attaches a handler — nothing is logged | 🟠 | ☐ |
+| [ISS-09](#iss-09) | `logger.py` | Logger never attaches a handler — nothing is logged | 🟠 | ☑ |
 | [ISS-10](#iss-10) | `base_ammeter.py` | No `SO_REUSEADDR` — restart fails with "address in use" | 🟠 | ☐ |
 | [ISS-11](#iss-11) | `base_ammeter.py` | Unknown commands dropped silently, client hangs | 🟠 | ☐ |
 | [ISS-12](#iss-12) | `client.py` | No socket timeout and no error handling | 🟠 | ☑ |
@@ -58,6 +58,7 @@ Two entries the first pass of this triage put in the deferred pile were pulled b
 | [ISS-14](#iss-14) | README | Documented file paths and names do not exist | 🟡 | ☐ |
 | [ISS-16](#iss-16) | `base_ammeter.py` | Global RNG reseeded per instance; correlated sequences | 🟡 | ☐ |
 | [ISS-21](#iss-21) | `requirements.txt` | Five heavy dependencies, only one is imported | 🟡 | ☐ |
+| [ISS-22](#iss-22) | Emulators | Unconditional `print()` on every measurement | ⚪ | ☑ |
 | [ISS-23](#iss-23) | Design | Devices produce non-comparable magnitudes | 🟡 | ☑ |
 | [ISS-24](#iss-24) | `Greenlee_Ammeter.py` | `Ω` in `print()` kills the thread on a non-UTF-8 console | 🔴 | ☑ |
 
@@ -73,7 +74,12 @@ costs, so the decision can be re-read later rather than re-argued.
 | [ISS-18](#iss-18) | `base_ammeter.py` | Servers cannot be stopped; one client at a time | 🟡 | Blocks the structural half of ISS-03 and the framework-controlled emulator lifecycle |
 | [ISS-19](#iss-19) | Packaging | No `__init__.py`; imports depend on the working directory | 🟡 | `__init__.py` done; the CWD-relative `config_path` remains, with ISS-15 |
 | [ISS-20](#iss-20) | Protocol | Reply has no framing or delimiter | 🟡 | Same class as ISS-17; safe only because replies are short and loopback is reliable |
-| [ISS-22](#iss-22) | Emulators | Unconditional `print()` on every measurement | ⚪ | stdout floods during a run, and the I/O sits inside the timed sampling loop |
+
+**Un-deferred:** [ISS-22](#iss-22) was on this list with a note that it would be worth folding
+into the ISS-09 logger branch if it turned out cheap there. It was — four `print()` calls
+became `logger.debug` once a working logger existed — so it is fixed and has moved back to the
+must-fix table above. The note is left here because a deferral that later gets picked up is
+worth being able to see.
 
 ---
 
@@ -395,6 +401,31 @@ bare logger. No `FileHandler`, no `Formatter`, no level. Consequences:
 set the level, and guard against duplicate handler registration.
 
 *Verify:* after a run, `results/logs/<timestamp>_<test>.log` exists and is non-empty.
+
+**☑ Fixed.** `TestLogger` now attaches a `FileHandler` at DEBUG and a `StreamHandler` at
+WARNING, both with a formatter, sets the level, and returns early when the name it was given
+already owns a file handler — so the duplicate-registration case named above writes each line
+once instead of twice, and `log_file` reports the file actually being written. Every listed
+consequence is addressed: `log_file` is live, the level is explicit, `propagate = False` stops
+records reaching the root logger, and a repeated `test_name` no longer stacks handlers.
+
+Four things the required fix did not ask for, added because leaving them out would have
+reintroduced bugs this catalogue already records:
+
+- **`encoding="utf-8"` on the file handler.** ISS-24's lesson applied to files — a log must
+  not mangle or fail on the machine's code page, and a Windows run has to be readable on Linux.
+- **The directory resolved from `__file__`, not the CWD.** `"results/logs"` as a relative path
+  is the same defect as the one `result_manager.RESULTS_DIR` already fixed: run from anywhere
+  else and a second log tree quietly appears beside the caller.
+- **`close()`, plus context-manager support.** One run is one open file handle; on Windows an
+  unclosed handler keeps the file locked against anything that wants to read or move it.
+- **UTC throughout**, filename and records alike, because measurements are archived in UTC and
+  a log line that cannot be lined up against a sample timestamp is worth much less.
+
+*Verified:* `python main.py` writes one non-empty file per device under `results/logs/`, and a
+16-check suite covers the duplicate-name guard, handle release, the context manager, UTF-8
+bytes on a `cp1255` console, level routing, project-root resolution from a foreign working
+directory, and both failure paths.
 
 ---
 
@@ -725,12 +756,8 @@ ten terms averages the spread down by √10.
 ### ISS-22
 **Unconditional printing on every measurement**
 
-> **⏸ Deferred — nice to have.** Noisy, and the write does sit inside the loop whose timing
-> the framework measures, but it produces no wrong reading and no wrong statistic. The
-> measured drift with the prints in place is 11 ms worst case at 2 Hz, well inside tolerance.
-> Note that ISS-09 (the logger) *is* scheduled: once a working logger exists, converting
-> these four `print()` calls to `logger.debug` is a few lines, so this is worth doing
-> opportunistically on that branch rather than as work of its own.
+> **☑ Fixed — was deferred, then picked up on the ISS-09 branch as that deferral predicted.**
+> Converting the four `print()` calls cost a few lines once a working logger existed.
 
 *Location:* `Greenlee_Ammeter.py:15`, `Entes_Ammeter.py:15`, `Circutor_Ammeter.py:16,18`
 
@@ -739,3 +766,20 @@ sampling this floods stdout and interleaves with result output, and the I/O itse
 perturbs the timing the framework is trying to measure precisely.
 
 *Required fix:* route through the logger at debug level (see ISS-09).
+
+**☑ Fixed.** Each emulator module now holds a `logging.getLogger(__name__)` and calls
+`logger.debug(...)` with `%s` placeholders, so an unhandled record costs nothing to build. No
+handler is attached in the emulators: they are the device under test, and where their output
+goes is the running program's decision — `logging.basicConfig(level=logging.DEBUG)` in a driver
+reveals them. CIRCUTOR's two prints became one record, because the pair straddled the summation
+and a second device's line could land between a reading and its own current.
+
+`base_ammeter.py`'s `"<class> is running on port <n>"` **stays a `print`**, deliberately. It
+fires once per process rather than once per measurement, so it is not part of the flood, and it
+is currently the only indication that the servers came up — routing it to an unhandled logger
+would silence the one line an operator waits for. It moves when ISS-18 gives the emulators a
+real readiness signal.
+
+*Verified:* `python main.py` now prints only the three startup lines and the comparison table;
+the per-measurement detail is in `results/logs/`. A driver that calls `basicConfig(DEBUG)` still
+receives the emulator records, and their text is ASCII.
