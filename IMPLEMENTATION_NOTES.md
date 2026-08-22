@@ -14,7 +14,7 @@ Individual bugs are catalogued in [`ISSUES.md`](ISSUES.md); this file records wh
 | 2. Measurement Sampling | done |
 | 3. Result Analysis | done |
 | 4. Result Management | done |
-| 5. Accuracy Assessment (bonus) | not started |
+| 5. Accuracy Assessment (bonus) | precision only — accuracy not delivered, by design |
 
 ---
 
