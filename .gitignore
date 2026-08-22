@@ -5,8 +5,14 @@
 __pycache__/
 *.pyc
 
-# Heavy Data or IDE directories
+# Test and coverage artefacts
 .pytest_cache/
+.coverage
+.coverage.*
+coverage.xml
+htmlcov/
+
+# Heavy Data or IDE directories
 .idea/
 .vscode/
 
@@ -23,6 +29,7 @@ results/*
 
 # Local assistant / tooling working files - not part of the deliverable
 CLAUDE.md
+INTERVIEW_PREP.md
 .claude/
 .cursor/
 .cursorrules
