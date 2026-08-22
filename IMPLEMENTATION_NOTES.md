@@ -86,6 +86,19 @@ the stale comment block and the commented per-device `request_current_from_ammet
 were deleted with it, since the config-driven API reaches the same devices and those lines
 only preserved ISS-01's wrong commands.
 
+**The config file is read as UTF-8.** [ISS-15](ISSUES.md#iss-15) — `load_config` opened
+the file with no `encoding`, so it decoded through the platform's preferred encoding: the ANSI
+code page on Windows (`cp1255` here), UTF-8 on Linux. `config/config.yaml` is pure ASCII
+today, so the bug is latent rather than active — it fires the first time a device name,
+comment or path in the registry carries a non-ASCII character, and it fires *differently* on
+each platform, which the cross-platform constraint rules out. This is ISS-24's lesson applied
+to a file read instead of a console write, and it is the same one-word fix already made in
+`logger.py` and `result_manager.py`. Only the encoding was fixed: `config_path` is still
+resolved against the working directory and the config is still unvalidated, so the rest of
+ISS-15 stays deferred and the framework still runs from the repository root only. The
+supplied Hebrew docstring above the line was deliberately left as it was — the fix is one
+argument, and rewriting a supplied file further is not part of it.
+
 **Verified.** `python main.py` on this machine's `cp1255` console, with no environment
 override: three startup lines, three archived runs with a JSON, a PNG and a log each, and
 all three devices in the comparison table. Before the ISS-24 fix the same command lost
@@ -236,9 +249,12 @@ library `statistics` only.
 
 **Reporting.** `AnalysisResult.__str__` renders the run as a labelled block. `main.py`
 printed one per device until section 5 replaced that sweep with the cross-device comparison
-table; the block is still what the archive and `examples/` render, and the mean and standard
-deviation survive into the comparison, but median, min and max no longer reach the console.
-Values are formatted to six significant figures rather than a fixed
+table, at which point median, min and max stopped reaching the console — the comparison
+carries only the mean and the standard deviation. That was a reporting regression rather than
+a deliberate trade: the five statistics are what section 3 is asked for, and a demo run that
+archives them but never shows them leaves the reader to open a JSON file to see the work. The
+block is printed per device again, above the table, and remains what the archive and the log
+render. Values are formatted to six significant figures rather than a fixed
 decimal count: the devices read three orders of magnitude apart, so `%.2f` would show every
 CIRCUTOR statistic as `0.01`. An undefined standard deviation prints as
 `n/a (needs 2+ samples)`, never as a number.
@@ -706,7 +722,9 @@ nobody has got to yet.
   ([ISS-15](ISSUES.md#iss-15)), so the framework runs from the repo root only. The path fix
   and the missing-file handling were kept together deliberately rather than landing half in
   two places; deferring one defers both, along with the remaining half of
-  [ISS-19](ISSUES.md#iss-19).
+  [ISS-19](ISSUES.md#iss-19). The *encoding* half of ISS-15 is no longer deferred — it was a
+  one-argument fix against a stated Technical Constraint, so it landed on its own; see
+  *Groundwork*.
 - `main.py` keeps the supplied `sleep(5)`. The trailing `pass` is gone, but removing the
   sleep needs a readiness signal, which is [ISS-18](ISSUES.md#iss-18) and deferred. Five
   seconds of startup on a program that then runs for two is the accepted cost.

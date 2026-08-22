@@ -6,10 +6,10 @@ error in the code, please fix it, and explain the fix in the documentation."* Th
 is the catalogue of what is wrong. Each fix, once applied, is explained in
 `IMPLEMENTATION_NOTES.md`.
 
-Last updated: 2026-08-22. **Status: ISS-01, ISS-02, ISS-04, ISS-05, ISS-07, ISS-08, ISS-09,
-ISS-11, ISS-12, ISS-14, ISS-22, ISS-23, ISS-24 and ISS-25 fixed. ISS-13 and ISS-19 partially
-addressed. Still open in the must-fix list: ISS-03 (partial), ISS-06, ISS-10, ISS-16 and
-ISS-21.**
+Last updated: 2026-08-23. **Status: ISS-01, ISS-02, ISS-04, ISS-05, ISS-07, ISS-08, ISS-09,
+ISS-11, ISS-12, ISS-14, ISS-22, ISS-23, ISS-24 and ISS-25 fixed. ISS-13, ISS-15 and ISS-19
+partially addressed. Still open in the must-fix list: ISS-03 (partial), ISS-06, ISS-10, ISS-16
+and ISS-21.**
 
 **Severity:** 🔴 Blocker (nothing works until fixed) · 🟠 High (wrong or misleading
 behaviour) · 🟡 Medium (fragile, will bite under load or on another OS) · ⚪ Low (polish)
@@ -71,7 +71,7 @@ costs, so the decision can be re-read later rather than re-argued.
 
 | ID | Area | Issue | Severity | Cost of leaving it |
 | --- | --- | --- | --- | --- |
-| [ISS-15](#iss-15) | `config.py` | File opened without explicit encoding; no validation | 🟡 | Framework runs only from the repo root; a non-ASCII config would mis-decode on Windows |
+| [ISS-15](#iss-15) | `config.py` | File opened without explicit encoding; no validation | 🟡 | ◐ Encoding fixed 2026-08-23. What is still accepted: the framework runs only from the repo root, and a malformed or missing config gives no clear error |
 | [ISS-17](#iss-17) | `base_ammeter.py` | Exact byte compare on a single `recv()` | 🟡 | A split TCP segment or a trailing newline reads as an unknown command |
 | [ISS-18](#iss-18) | `base_ammeter.py` | Servers cannot be stopped; one client at a time | 🟡 | Blocks the structural half of ISS-03 and the framework-controlled emulator lifecycle |
 | [ISS-19](#iss-19) | Packaging | No `__init__.py`; imports depend on the working directory | 🟡 | `__init__.py` done; the CWD-relative `config_path` remains, with ISS-15 |
@@ -627,11 +627,14 @@ and the quoted console output is from a real `python main.py` run.
 ### ISS-15
 **Config file opened without an explicit encoding**
 
-> **⏸ Deferred — nice to have.** `config/config.yaml` is pure ASCII, so the encoding bug is
-> latent: it fires the day someone puts a non-ASCII device name in the registry. Accepting it
-> also accepts ISS-19's remaining half, folded in here — `config_path` stays CWD-relative, so
-> the framework runs only from the repo root. That is a usage constraint, not a silent
-> failure, and it belongs in the README (ISS-14) instead of in code.
+> **◐ Partially fixed (2026-08-23) — the rest stays ⏸ deferred.** The encoding was
+> un-deferred and fixed on its own: `load_config` now opens the file with `encoding='utf-8'`.
+> Cross-platform compatibility is a stated Technical Constraint and the fix is one argument,
+> which is a different trade from the validation work bundled below it. Still accepted:
+> `config_path` stays CWD-relative (ISS-19's remaining half, folded in here), so the framework
+> runs only from the repo root, and there is still no schema validation or missing-file error.
+> That is a usage constraint, not a silent failure, and it belongs in the README (ISS-14)
+> instead of in code.
 
 *Location:* `src/utils/config.py:8`
 
@@ -640,8 +643,8 @@ page, not UTF-8 — so any non-ASCII content mis-decodes. The spec requires cros
 compatibility. There is also no file-not-found handling and no schema validation; an
 empty file silently yields `None`.
 
-*Required fix:* `open(config_path, 'r', encoding='utf-8')`, plus validation and a clear
-error when the file is missing or malformed.
+*Required fix:* `open(config_path, 'r', encoding='utf-8')` ☑ **done**, plus validation and a
+clear error when the file is missing or malformed ☐ **still open**.
 
 *Scope note (2026-08-18):* this issue also now owns resolving `AmmeterTestFramework`'s
 `config_path` against the project root instead of the CWD, deferred here from ISS-19 so the
