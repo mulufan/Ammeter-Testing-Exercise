@@ -1,6 +1,6 @@
 # Roadmap
 
-A living document. Check items off as they ship. Last updated: 2026-08-21.
+A living document. Check items off as they ship. Last updated: 2026-08-22.
 
 Milestones 1–5 are the five sections of the assignment's Problem Statement, in its order and
 under its names. Milestone 0 (fixing the supplied code) and Milestone 6 (documentation) are
@@ -31,7 +31,9 @@ must always produce results with the stack down.
 - [ ] Config loading: UTF-8, validation, path resolved from the project root — ISS-15, ISS-19
 - [ ] Logger actually writes to `results/logs/` — ISS-09
 - [ ] `examples/run_tests.py` runs — ISS-06
-- [ ] Emulator print flood removed, including the `Ω` crash on non-UTF-8 consoles — ISS-22, ISS-24
+- [ ] Emulator print flood removed, including the `Ω` crash on non-UTF-8 consoles — ISS-22,
+      ISS-24; the `Ω` crash is fixed (the console text says `Ohm`), the flood is not — the
+      emulators still print on every measurement, which waits on the logger (ISS-09)
 - [ ] **Observability:** `docker-compose.yml`, scrape config and auto-provisioned Grafana datasource committed and verified up
 
 ## 🟡 Milestone 1 — Unified Measurement API

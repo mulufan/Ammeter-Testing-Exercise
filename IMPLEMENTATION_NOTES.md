@@ -40,12 +40,29 @@ way round.** Two files said 5000 and one said 5001, but counting files is the wr
 Receiver on macOS, so adopting it would have written a guaranteed `bind()` failure into a
 project whose constraints include cross-platform support.
 
-**Found here, still open.** [ISS-24](ISSUES.md#iss-24) — `Greenlee_Ammeter.py` prints the `Ω`
+**Found here, fixed here.** [ISS-24](ISSUES.md#iss-24) — `Greenlee_Ammeter.py` printed the `Ω`
 character, so on a console whose encoding is not UTF-8 (this machine's is `cp1255`) the
-`UnicodeEncodeError` propagates out of the accept loop and kills the Greenlee thread before
-it can reply. Run with `PYTHONIOENCODING=utf-8` until it is fixed. It belongs with the
-logger work (ISS-09 / ISS-22); reconfiguring `sys.stdout` would hide the class of bug rather
-than remove it — a measurement path should not fail based on the operator's locale.
+`UnicodeEncodeError` propagated out of the accept loop and killed the Greenlee thread before
+it could reply. The device then refused every subsequent connection, which reads as a port or
+protocol fault and is expensive to chase — ENTES and CIRCUTOR print pure ASCII and were
+unaffected, so Greenlee looked individually broken. The console text now says `Ohm`.
+
+**Decision — spell the unit, do not widen the console.** Two alternatives were rejected.
+Reconfiguring `sys.stdout` to UTF-8 (or setting `PYTHONIOENCODING`) hides the class of bug
+instead of removing it: a measurement path must not depend on the operator's locale, and the
+next non-ASCII character added anywhere would fail the same way on a machine without the
+override. Wrapping the accept loop in a blanket `except Exception` would keep the thread
+alive through a crash it should not be having, and belongs with the emulator lifecycle work
+([ISS-11](ISSUES.md#iss-11), [ISS-18](ISSUES.md#iss-18)) rather than being bolted on here.
+The print itself is still unconditional and still floods stdout during sampling; removing it
+is [ISS-22](ISSUES.md#iss-22), which waits on the logger ([ISS-09](ISSUES.md#iss-09)). This
+fix makes the line safe, not absent.
+
+**Verified.** `python main.py` on this machine's `cp1255` console, with no environment
+override: five Greenlee samples and all three devices in the comparison table. The same
+command before the change lost Greenlee to `UnicodeEncodeError` and ranked two devices.
+`Ammeters/`, `src/` and `main.py` now contain no non-ASCII on any console path; what remains
+is Hebrew comments and docstrings in `src/utils/` and `examples/`, which are never printed.
 
 ---
 
@@ -124,9 +141,11 @@ sleeps until each sample's target time and takes one reading.
 - **A bad reply skips one sample; an unreachable device aborts the run.** A malformed
   reading is one lost data point; a device that has stopped answering will not start again on
   its own, and continuing would produce a run whose sample count means nothing.
-- **`main.py` catches per device.** ISS-24 kills the Greenlee thread on a non-UTF-8 console,
-  and without the per-device catch that one dead device would take the other two down with
-  it — the abort policy above is deliberately blunt, so the caller contains it.
+- **`main.py` catches per device.** The abort policy above is deliberately blunt, so the
+  caller contains it: one dead device must not take the other two down with it. ISS-24 was
+  the live demonstration — it killed the Greenlee thread on a non-UTF-8 console, and the
+  sweep still reported ENTES and CIRCUTOR. That bug is fixed; the guard stays, because any
+  device that stops answering mid-run produces the same shape of failure.
 - **Configured values are validated as positive numbers before any arithmetic** (added in
   review). Zero and negative values otherwise survive the derivation and surface much later:
   `duration=0` raised a bare `ZeroDivisionError`, `frequency=0` and `count=1` crashed inside
@@ -148,9 +167,9 @@ logged. Skipped samples are not tallied, so a short result list is indistinguish
 short configuration. Errors go to stdout via `print`, interleaving with results, until the
 logger (ISS-09) is built.
 
-**Verified.** `python main.py` — 5 samples from each of the three devices, ~0.5 s apart.
-Under `PYTHONIOENCODING=cp1255`, Greenlee reports `Sampling failed: ...` per ISS-24 and the
-other two still deliver their samples.
+**Verified.** `python main.py` — 5 samples from each of the three devices, ~0.5 s apart. The
+per-device guard was verified against ISS-24 while it was still open: on a `cp1255` console
+Greenlee reported `Sampling failed: ...` and the other two still delivered their samples.
 
 ---
 
@@ -393,11 +412,12 @@ from the console sweep, which now shows only the comparison table. The report is
 the visualisation bonus is unstarted.
 
 **Verified.** A full sweep with all three emulators alive ranks entes 27.32%, greenlee
-57.42%, circutor 57.84% at n=5 — the near-tie the caveat warns about. Running on a
-non-UTF-8 Windows console, where Greenlee's thread dies on [ISS-24](ISSUES.md#iss-24), now
-prints `Skipping greenlee: …` and still produces the table for the other two; before the
-`except (AmmeterError, ValueError)` guard the same command died with an unhandled
-`AmmeterConnectionError` and printed nothing at all. `compare_precision([])` raises
+57.42%, circutor 57.84% at n=5 — the near-tie the caveat warns about. The single-device-down
+path was verified against [ISS-24](ISSUES.md#iss-24) while it was open: on a non-UTF-8
+Windows console the sweep printed `Skipping greenlee: …` and still produced the table for the
+other two, where before the `except (AmmeterError, ValueError)` guard the same command died
+with an unhandled `AmmeterConnectionError` and printed nothing at all. With ISS-24 fixed the
+same console now ranks all three. `compare_precision([])` raises
 `ValueError`. A device with `standard_deviation=None` renders as `N/A` and sorts last; a
 device with `CV=0.0` sorts first rather than being confused with an undefined one. Columns
 line up under their headers. `compileall` and `scripts/ci_import_check.py` both clean.
@@ -438,5 +458,10 @@ workflow marks where the `pytest` step goes when Stage 3 produces real tests.
   Raising it to `50 / 4.9 s / 10 Hz` is the fix when the ranking needs to mean something.
 - `AmmeterResponseError` names the port but not the offending payload — recoverable from the
   chained traceback, absent from the line an operator actually reads.
-- ISS-24 (the `Ω` print) is unfixed; Greenlee needs `PYTHONIOENCODING=utf-8` on a non-UTF-8
-  console.
+- The emulators still `print()` their internals on every measurement
+  ([ISS-22](ISSUES.md#iss-22)). ISS-24 made that line dangerous on a non-UTF-8 console and is
+  fixed, but the flood — and the I/O cost inside the timed sampling path — waits on the
+  logger ([ISS-09](ISSUES.md#iss-09)).
+- An exception raised inside `measure_current()` still escapes the accept loop and kills the
+  emulator thread for the rest of the process ([ISS-18](ISSUES.md#iss-18)). ISS-24 was one
+  way to trigger it; the loop has no error boundary of its own.
