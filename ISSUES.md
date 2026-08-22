@@ -85,8 +85,9 @@ the strings from config rather than hardcoding them a second time (see ISS-08).
 a commented-out call cannot be verified, and the issue's own verification criterion
 requires the requests to actually be sent. Sourcing the strings from config is deferred
 with ISS-08; the ports and commands are still hardcoded here, so this is a corrected
-duplicate rather than a single source of truth. The remainder of ISS-03 (the `sleep(5)` /
-`pass` structure and clean shutdown) is untouched and still open.
+duplicate rather than a single source of truth. The trailing `pass` went with section 5,
+which gave `main.py` a real body; the remainder of ISS-03 (the `sleep(5)` and clean
+shutdown) is untouched and still open.
 
 ---
 
@@ -225,8 +226,9 @@ file directly fails with "attempted relative import with no known parent package
 absolute `from src.utils.config import load_config` — the file had been mixing both styles,
 so it could only ever be imported one way.
 
-Still open from the *Related* note: `run_test()` remains an empty `pass`. It is the sampling
-entry point and belongs with that stage, not with the import fix.
+The *Related* note — `run_test()` being an empty `pass` — was closed by section 4, which
+made it the run entry point: it assigns the run ID, resolves the sampling configuration,
+collects the samples and returns a `TestRunResult`.
 
 ---
 
