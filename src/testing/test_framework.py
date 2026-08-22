@@ -1,3 +1,4 @@
+import logging
 import math
 import time
 import statistics
@@ -7,6 +8,7 @@ from Ammeters.client import request_current_from_ammeter
 from Ammeters.client import AmmeterConnectionError, AmmeterResponseError
 
 from src.utils.config import load_config
+from src.utils.logger import TestLogger
 from src.testing.models import (Measurement, SamplingConfig, AnalysisResult, TestRunResult, PrecisionResult, utc_now)
 
 
@@ -38,16 +40,52 @@ class AmmeterTestFramework:
         self.config = load_config(config_path)
 
     def run_test(self, ammeter_type: str) -> TestRunResult:
+        """
+        Run one complete test against a device and return the archived result.
+
+        The run writes its own log file under `results/logs/`, named for the device and
+        the first octet of the run ID, so a run's console output, its JSON archive and
+        its log can all be tied back to the same `test_id`.
+        """
         ammeter_type = ammeter_type.lower()
 
         test_id = str(uuid4())
         started_at = utc_now()
 
-        sampling_config = self._get_sampling_config()
-        measurements = self.collect_samples(ammeter_type)
-        analysis = self.analyze_measurements(measurements)
+        # The short ID keeps the filename readable while staying unique in practice;
+        # the full ID is in the first line of the log itself.
+        with TestLogger(f"{ammeter_type}_{test_id[:8]}") as logger:
+            logger.info("Run %s started against %s", test_id, ammeter_type)
 
-        completed_at = utc_now()
+            try:
+                sampling_config = self._get_sampling_config()
+                logger.info(
+                    "Sampling %d measurement(s) over %.6g s at %.6g Hz",
+                    sampling_config.measurements_count,
+                    sampling_config.total_duration_seconds,
+                    sampling_config.sampling_frequency_hz,
+                )
+
+                measurements = self.collect_samples(ammeter_type, logger=logger)
+                analysis = self.analyze_measurements(measurements)
+
+            # Logged where the context is still known, then re-raised unchanged: the
+            # caller's handling of a failed run is not this method's decision.
+            except Exception as exc:
+                logger.error("Run %s failed: %s: %s", test_id, type(exc).__name__, exc)
+                raise
+
+            completed_at = utc_now()
+
+            logger.info(
+                "Run %s completed: %d sample(s) in %.3f s",
+                test_id,
+                analysis.sample_count,
+                (completed_at - started_at).total_seconds(),
+            )
+            # The statistics as they will be archived, so the log alone answers
+            # "what did this run actually measure".
+            logger.info("Statistics:\n%s", analysis)
 
         return TestRunResult(
         test_id=test_id,
@@ -151,11 +189,17 @@ class AmmeterTestFramework:
         # Timestamp is taken here, as close to the reading as possible.
         return Measurement(ammeter_type=ammeter_type, current=current)
 
-    def collect_samples(self, ammeter_type: str) -> list[Measurement]:
+    def collect_samples(self, ammeter_type: str, logger=None) -> list[Measurement]:
         """
         Collect current measurements according to the configured sampling settings.
         Uses a monotonic clock to avoid timing drift between samples.
+
+        `logger` accepts a `TestLogger` or a standard `logging.Logger`. Called directly
+        without one, the messages go to a module logger that has no handler - silence,
+        rather than the `print()` output this method used to interleave with results.
         """
+        logger = logger if logger is not None else logging.getLogger(__name__)
+
         sampling_config = self._get_sampling_config()
 
         measurements = []
@@ -174,11 +218,22 @@ class AmmeterTestFramework:
             try:
                 measurement = self.get_measurement(ammeter_type)
                 measurements.append(measurement)
+                logger.debug(
+                    "Sample %d/%d: %.6g A",
+                    index + 1,
+                    sampling_config.measurements_count,
+                    measurement.current,
+                )
 
             except AmmeterResponseError as exc:
-                print(f"Skipping measurement due to ammeter response error: {exc}")
+                logger.warning(
+                    "Sample %d/%d skipped, ammeter response error: %s",
+                    index + 1,
+                    sampling_config.measurements_count,
+                    exc,
+                )
             except AmmeterConnectionError as exc:
-                print(f"Aborting sampling due to ammeter connection error: {exc}")
+                logger.error("Sampling aborted, ammeter connection error: %s", exc)
                 raise
 
         return measurements

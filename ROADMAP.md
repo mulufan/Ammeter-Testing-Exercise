@@ -37,11 +37,13 @@ nobody intends to do.
       Clean shutdown was part of this line and is now **⏸ deferred** with ISS-18
 - [ ] ⏸ **Deferred** — config loading: UTF-8, validation, path resolved from the project root
       — ISS-15, ISS-19. The framework runs from the repo root only; the README says so
-- [ ] Logger actually writes to `results/logs/` — ISS-09
+- [x] Logger actually writes to `results/logs/` — ISS-09; one file per run, DEBUG detail to
+      the file and warnings to stderr, explicit UTF-8, path resolved from the project root
 - [ ] `examples/run_tests.py` runs — ISS-06
-- [x] `Ω` crash on non-UTF-8 consoles fixed — ISS-24; the console text says `Ohm`. The print
-      flood itself (ISS-22) is **⏸ deferred**, to be folded into the ISS-09 logger branch if
-      it is cheap there
+- [x] Emulator print flood removed, including the `Ω` crash on non-UTF-8 consoles — ISS-22,
+      ISS-24. The console text says `Ohm`, and the per-measurement `print()`s became
+      `logger.debug` on the ISS-09 branch as planned. `base_ammeter`'s one-line startup
+      message stays a `print`: it is once per process and the only signal the servers are up
 - [ ] **Observability:** `docker-compose.yml`, scrape config and auto-provisioned Grafana datasource committed and verified up
 
 ## 🟡 Milestone 1 — Unified Measurement API
