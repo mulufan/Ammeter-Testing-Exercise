@@ -16,6 +16,12 @@ must always produce results with the stack down.
 
 **Status:** ⬜ not started · 🟡 in progress · ✅ done
 
+An unticked box is work still intended. A box marked **⏸ deferred** is not: it depends on a
+finding that the [triage in `ISSUES.md`](ISSUES.md#triage-2026-08-22) consciously took off the
+work list, and the note says what leaving it costs. Deferred boxes are counted as settled when
+judging whether a milestone is complete — otherwise every milestone stays 🟡 forever on work
+nobody intends to do.
+
 ---
 
 ## 🟡 Milestone 0 — Supplied code fixed
@@ -27,13 +33,15 @@ must always produce results with the stack down.
 - [x] Client returns a parsed `float`, with a socket timeout and typed errors — ISS-04, ISS-12
 - [x] `test_framework.py` imports cleanly; all four directories are packages — ISS-05, ISS-19 (partial)
 - [x] `python main.py` prints a real reading from all three ammeters
-- [ ] Emulators: `SO_REUSEADDR`, explicit reply to unknown commands, clean shutdown — ISS-10, ISS-11, ISS-18
-- [ ] Config loading: UTF-8, validation, path resolved from the project root — ISS-15, ISS-19
+- [ ] Emulators: `SO_REUSEADDR` and an explicit reply to unknown commands — ISS-10, ISS-11.
+      Clean shutdown was part of this line and is now **⏸ deferred** with ISS-18
+- [ ] ⏸ **Deferred** — config loading: UTF-8, validation, path resolved from the project root
+      — ISS-15, ISS-19. The framework runs from the repo root only; the README says so
 - [ ] Logger actually writes to `results/logs/` — ISS-09
 - [ ] `examples/run_tests.py` runs — ISS-06
-- [ ] Emulator print flood removed, including the `Ω` crash on non-UTF-8 consoles — ISS-22,
-      ISS-24; the `Ω` crash is fixed (the console text says `Ohm`), the flood is not — the
-      emulators still print on every measurement, which waits on the logger (ISS-09)
+- [x] `Ω` crash on non-UTF-8 consoles fixed — ISS-24; the console text says `Ohm`. The print
+      flood itself (ISS-22) is **⏸ deferred**, to be folded into the ISS-09 logger branch if
+      it is cheap there
 - [ ] **Observability:** `docker-compose.yml`, scrape config and auto-provisioned Grafana datasource committed and verified up
 
 ## 🟡 Milestone 1 — Unified Measurement API
@@ -45,7 +53,8 @@ consistently.*
 - [x] All three return the same result type — `Measurement` (device, current, unit, UTC timestamp)
 - [x] Failures surface as one error family regardless of device — `AmmeterError`
 - [x] Device name, port and command come from `config.yaml`; a fourth ammeter is a config entry plus an emulator class
-- [ ] Emulator start/stop controllable from the framework, not only from `main.py`
+- [ ] ⏸ **Deferred** — emulator start/stop controllable from the framework, not only from
+      `main.py`; needs the lifecycle work in ISS-18
 - [ ] **Observability:** one shared registry behind the client, so every device is instrumented identically — call counter, error counter by failure kind, and latency histogram, all labelled by ammeter type
 
 ## 🟡 Milestone 2 — Measurement Sampling
