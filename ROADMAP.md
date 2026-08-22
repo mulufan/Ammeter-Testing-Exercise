@@ -34,7 +34,8 @@ nobody intends to do.
 - [x] `test_framework.py` imports cleanly; all four directories are packages — ISS-05, ISS-19 (partial)
 - [x] `python main.py` prints a real reading from all three ammeters
 - [ ] Emulators: `SO_REUSEADDR` and an explicit reply to unknown commands — ISS-10, ISS-11.
-      Clean shutdown was part of this line and is now **⏸ deferred** with ISS-18
+      The unknown-command reply shipped (ISS-11 ☑); `SO_REUSEADDR` (ISS-10) has not. Clean
+      shutdown was part of this line and is now **⏸ deferred** with ISS-18
 - [ ] ⏸ **Deferred** — config loading: UTF-8, validation, path resolved from the project root
       — ISS-15, ISS-19. The framework runs from the repo root only; the README says so
 - [x] Logger actually writes to `results/logs/` — ISS-09; one file per run, DEBUG detail to

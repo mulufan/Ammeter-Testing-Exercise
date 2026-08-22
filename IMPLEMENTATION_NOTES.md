@@ -58,6 +58,17 @@ The print itself was still unconditional when this landed; removing it was
 [ISS-22](ISSUES.md#iss-22), waiting on the logger ([ISS-09](ISSUES.md#iss-09)) and delivered
 with it — see *Supporting work — run logging*. This fix made the line safe, not absent.
 
+**Unknown commands are answered.** [ISS-11](ISSUES.md#iss-11) — the supplied accept loop had
+no `else`, so a command it did not recognise got no reply and left no trace; the connection
+just closed. The `else` branch now sends `b"ERROR: unknown command"` and logs the device, port
+and rejected bytes at WARNING. The reply is non-numeric on purpose: the client parses with
+`float()`, so it surfaces as `AmmeterResponseError` — the device answered and refused — rather
+than the `AmmeterConnectionError` that means the device is not there. `%r` on the received
+bytes keeps the record ASCII whatever a client sends, which is ISS-24's failure mode arriving
+from the other direction. What it does not do is carry the payload into the client's own error
+message, so the "wrong command" versus "garbage reply" distinction lives on the emulator's
+console; that remains queued.
+
 **Verified.** `python main.py` on this machine's `cp1255` console, with no environment
 override: five Greenlee samples and all three devices in the comparison table. The same
 command before the change lost Greenlee to `UnicodeEncodeError` and ranked two devices.
