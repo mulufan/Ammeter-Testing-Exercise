@@ -169,6 +169,19 @@ under [`results/samples/`](results/samples):
 | ENTES | [`2b296839….json`](results/samples/2b296839-3a2d-4e4e-a397-f71c38b0d67b.json) | [`2b296839….png`](results/samples/2b296839-3a2d-4e4e-a397-f71c38b0d67b.png) |
 | CIRCUTOR | [`03e43979….json`](results/samples/03e43979-403b-42d4-b1b7-3cec4f1fb23e.json) | [`03e43979….png`](results/samples/03e43979-403b-42d4-b1b7-3cec4f1fb23e.png) |
 
+[`scripts/clean.py`](scripts/clean.py) clears the artefacts again — caches, coverage output
+and the run logs:
+
+```sh
+python scripts/clean.py -n        # list what would go, delete nothing
+python scripts/clean.py           # caches, coverage output, results/logs/
+python scripts/clean.py --runs    # also the run archive under results/runs/
+```
+
+The archive is opt-in because it is data, not build output. `results/samples/` is never
+touched, and `git clean -Xdf` is not the equivalent here: `.gitignore` also covers `.venv/`
+and the assignment PDF.
+
 ---
 
 ## Key design decisions
