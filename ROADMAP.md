@@ -32,7 +32,9 @@ nobody intends to do.
 - [x] Ports and commands reconciled across `main.py`, `config.yaml` and `README.md` — ISS-01, ISS-02, ISS-07
 - [x] Client returns a parsed `float`, with a socket timeout and typed errors — ISS-04, ISS-12
 - [x] `test_framework.py` imports cleanly; all four directories are packages — ISS-05, ISS-19 (partial)
-- [x] `python main.py` prints a real reading from all three ammeters
+- [x] `python main.py` prints a real reading from all three ammeters — all three emulator
+      threads now start; two were still commented out from the supplied file and the run
+      reached Greenlee only, found while verifying the README — ISS-25
 - [ ] Emulators: `SO_REUSEADDR` and an explicit reply to unknown commands — ISS-10, ISS-11.
       The unknown-command reply shipped (ISS-11 ☑); `SO_REUSEADDR` (ISS-10) has not. Clean
       shutdown was part of this line and is now **⏸ deferred** with ISS-18
@@ -132,21 +134,28 @@ consistently.*
       the sampling noise, and a separability test was cut as over-engineering
 - [ ] **Observability:** cross-device dashboard on shared normalised axes, with a side-by-side precision panel
 
-## ⬜ Milestone 6 — Documentation & polish
+## 🟡 Milestone 6 — Documentation & polish
 
 *Goal: the assignment's deliverables, complete and accurate.*
 
-- [ ] `README.md` structure, ports and commands match the real repo; install and usage instructions present — ISS-14
+- [x] `README.md` structure, ports and commands match the real repo; install and usage
+      instructions present — ISS-14. Rewritten around the finished solution: quick start,
+      Mermaid architecture diagram, device and component tables, the sampling rule, where
+      results are written, design decisions in brief, and the precision-is-not-accuracy
+      limitation in its own section
 - [ ] `requirements.txt` lists only what is actually imported — ISS-21. Four unused
       scientific packages are still listed (`matplotlib` left that group when the section 3
       plot began importing it, and the file now groups runtime, unused and test-only
       separately); `pytest` and `pytest-cov` were added on top and are the exception this
       line does not cover — they are test-only by design and marked as such in the file
-- [ ] Sample test results committed (raw samples, statistics, metadata, plots) — one curated
-      run per device is committed under `results/samples/` with raw samples, statistics and
-      metadata. The plotting code now exists, but no PNG has been committed alongside those
-      three curated runs yet, which is what keeps this unticked
-- [ ] `IMPLEMENTATION_NOTES.md` complete: every fix, every design decision and rejected alternative, every added dependency
+- [x] Sample test results committed (raw samples, statistics, metadata, plots) — one curated
+      run per device under `results/samples/`, each with its raw samples, statistics, metadata
+      and its measurement-series PNG, rendered from the committed JSON so the plot provably
+      belongs to that run. The unbounded `results/runs/` archive stays gitignored
+- [x] `IMPLEMENTATION_NOTES.md` complete: every fix, every design decision and rejected
+      alternative, every added dependency — one section per assignment section, plus
+      supporting work on logging, CI, the test suite and documentation, and an open-items
+      list splitting queued work from accepted costs
 - [ ] Verified on Windows and on at least one POSIX system — CI runs the suite on Linux;
       manual end-to-end verification on a POSIX system is still outstanding
 - [x] Automated tests in CI as a blocking gate — `pytest` over `tests/`, 98% coverage of
