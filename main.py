@@ -2,6 +2,8 @@ import threading
 import time
 
 from src.testing.test_framework import AmmeterTestFramework
+from src.testing.result_manager import save_test_run
+from src.testing.visualization import plot_measurement_series
 
 from Ammeters.Circutor_Ammeter import CircutorAmmeter
 from Ammeters.Entes_Ammeter import EntesAmmeter
@@ -24,8 +26,8 @@ def run_circutor_emulator():
 if __name__ == "__main__":
     # Start each ammeter in a separate thread
     threading.Thread(target=run_greenlee_emulator, daemon=True).start()
-    threading.Thread(target=run_entes_emulator, daemon=True).start()
-    threading.Thread(target=run_circutor_emulator, daemon=True).start()
+    # threading.Thread(target=run_entes_emulator, daemon=True).start()
+    # threading.Thread(target=run_circutor_emulator, daemon=True).start()
 
     # This section is commented out because it shouldn't work.
     # Read the README.md file as well as the source code if you need, and fix the problem.
@@ -46,6 +48,12 @@ if __name__ == "__main__":
             result = framework.run_test(ammeter_type)
             precision = framework.evaluate_precision(result.analysis)
             precision_results.append(precision)
+
+            # Archived first, then plotted into the same directory under the same
+            # test ID, so a run's JSON and its PNG are found together.
+            save_test_run(result)
+            plot_path = plot_measurement_series(result)
+            print(f"Saved {ammeter_type} measurement series plot: {plot_path}")
 
         # AmmeterError: the device could not be reached or replied unusably.
         # ValueError: it was reached but yielded nothing to analyse, because

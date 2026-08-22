@@ -53,10 +53,41 @@ This project provides emulators for different types of ammeters: Greenlee, ENTES
 **Python 3.10 or newer.** The framework uses built-in generic types (`list[Measurement]`)
 and `X | None` annotations, both of which are evaluated at import time.
 
+Install the dependencies first. The framework is standard library only apart from
+`pyyaml` (reads `config/config.yaml`) and `matplotlib` (draws the per-run plot below):
+
+```sh
+pip install -r requirements.txt
+```
+
 To start the ammeter emulators and request current measurements, run the `main.py` script:
 ```sh
 python main.py
 ```
+
+## Run Output
+
+Each completed run is written to `results/runs/` under its own UUID test ID:
+
+| File | Contents |
+| --- | --- |
+| `<test_id>.json` | the whole run — sampling configuration, every raw sample, and the statistics |
+| `<test_id>.png` | a line plot of measured current (A) against the timestamp of each sample |
+| `results/logs/<device>_<id>.log` | that run's log, from first sample to final statistics |
+
+The plot is deliberately minimal: one line with point markers, titled with the ammeter type
+and the short run ID, labelled axes and a grid. It is drawn by
+`plot_measurement_series(result)` in `src/testing/visualization.py`, which can also be called
+on any `TestRunResult` directly:
+
+```python
+from src.testing.visualization import plot_measurement_series
+
+path = plot_measurement_series(result)   # results/runs/<test_id>.png
+```
+
+It renders through Matplotlib's `Agg` backend, so it writes files without needing a display,
+and raises `ValueError` for a run that collected no measurements.
 
 ## Development Workflow
 
