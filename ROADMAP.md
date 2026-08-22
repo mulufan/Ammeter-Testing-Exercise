@@ -134,10 +134,17 @@ consistently.*
 *Goal: the assignment's deliverables, complete and accurate.*
 
 - [ ] `README.md` structure, ports and commands match the real repo; install and usage instructions present — ISS-14
-- [ ] `requirements.txt` lists only what is actually imported — ISS-21
+- [ ] `requirements.txt` lists only what is actually imported — ISS-21. The five unused
+      scientific packages are still listed; `pytest` and `pytest-cov` were added on top and
+      are the exception this line does not cover — they are test-only by design and marked
+      as such in the file
 - [ ] Sample test results committed (raw samples, statistics, metadata, plots) — one curated
       run per device is committed under `results/samples/` with raw samples, statistics and
       metadata; the plots are still missing, pending the section 3 visualisation bonus
 - [ ] `IMPLEMENTATION_NOTES.md` complete: every fix, every design decision and rejected alternative, every added dependency
-- [ ] Verified on Windows and on at least one POSIX system
+- [ ] Verified on Windows and on at least one POSIX system — CI runs the suite on Linux;
+      manual end-to-end verification on a POSIX system is still outstanding
+- [x] Automated tests in CI as a blocking gate — `pytest` over `tests/`, 98% coverage of
+      `src/` against an 85% floor (`--cov-fail-under=85`). Not an assignment deliverable;
+      recorded here because it gates every milestone above it
 - [ ] **Observability:** stack documented in the README, dashboard JSON committed, and the framework verified to produce complete results with the stack shut down
