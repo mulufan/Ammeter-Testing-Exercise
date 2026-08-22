@@ -1,6 +1,6 @@
 # Roadmap
 
-A living document. Check items off as they ship. Last updated: 2026-08-22.
+A living document. Check items off as they ship. Last updated: 2026-08-23.
 
 Milestones 1–5 are the five sections of the assignment's Problem Statement, in its order and
 under its names. Milestone 0 (fixing the supplied code) and Milestone 6 (documentation) are
@@ -38,8 +38,10 @@ nobody intends to do.
 - [ ] Emulators: `SO_REUSEADDR` and an explicit reply to unknown commands — ISS-10, ISS-11.
       The unknown-command reply shipped (ISS-11 ☑); `SO_REUSEADDR` (ISS-10) has not. Clean
       shutdown was part of this line and is now **⏸ deferred** with ISS-18
-- [ ] ⏸ **Deferred** — config loading: UTF-8, validation, path resolved from the project root
-      — ISS-15, ISS-19. The framework runs from the repo root only; the README says so
+- [ ] Config loading: UTF-8 ☑, validation and a project-root-relative path ☐ — ISS-15,
+      ISS-19. The encoding was un-deferred and fixed on its own (a stated Technical Constraint,
+      one argument to `open`); validation and the path stay **⏸ deferred**, so the framework
+      still runs from the repo root only and the README says so
 - [x] Logger actually writes to `results/logs/` — ISS-09; one file per run, DEBUG detail to
       the file and warnings to stderr, explicit UTF-8, path resolved from the project root
 - [ ] `examples/run_tests.py` runs — ISS-06
@@ -91,8 +93,9 @@ consistently.*
       meaningless — ISS-23
 - [x] Run summary printed in a clear, readable format — `AnalysisResult.__str__`; six
       significant figures, since the devices read orders of magnitude apart. Milestone 5
-      replaced the per-device sweep in `main.py` with the comparison table, so median, min
-      and max are archived but no longer printed to the console
+      replaced the per-device sweep in `main.py` with the comparison table, which dropped
+      median, min and max from the console; `main.py` prints the block per device again,
+      above the table, so all five statistics are visible in a plain run
 - [ ] *(Bonus)* Measurement series over time and per-device distribution plots saved with the
       run — the measurement series shipped: `src/testing/visualization.py` writes one
       Matplotlib line plot per run to `results/runs/<test_id>.png`, beside the run's JSON.
