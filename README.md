@@ -20,23 +20,37 @@ python main.py            # run from the repository root
 ```
 
 `main.py` starts the three emulators on daemon threads, runs one test per device from
-`config/config.yaml`, archives each run and prints the comparison table:
+`config/config.yaml`, archives each run, prints its statistics, and closes with the
+comparison table:
 
 ```
+CircutorAmmeter is running on port 5003
 GreenleeAmmeter is running on port 5001
 EntesAmmeter is running on port 5002
-CircutorAmmeter is running on port 5003
-Saved greenlee measurement series plot: results/runs/a5e8232a-....png
-Saved entes measurement series plot: results/runs/fcac7ecd-....png
-Saved circutor measurement series plot: results/runs/2043f05d-....png
+
+greenlee - 5 sample(s)
+  mean     0.0447466 A
+  median   0.0310724 A
+  std dev  0.0432712 A
+  min      0.0150893 A
+  max      0.119951 A
+Saved greenlee measurement series plot: C:\...\results\runs\95b21bb1-....png
+esults
+uns\95b21bb1-....png
+
+[ the same block for entes and circutor ]
 
 PRECISION COMPARISON
 Ammeter    Samples     Mean (A)     Std Dev     CV (%)
 --------------------------------------------------------
-circutor   5           0.0194613    0.0102081   52.45
-entes      5           53.1539      33.0703     62.22
-greenlee   5           0.124891     0.0844829   67.65
+entes      5           62.782       34.7619     55.37
+circutor   5           0.0319497    0.022056    69.03
+greenlee   5           0.0447466    0.0432712   96.70
 ```
+
+Real output from a run on 2026-08-23, elided where it repeats. The startup lines arrive in
+whatever order the three threads bind, the readings are random by design, and the plot path
+is absolute.
 
 Using the framework directly:
 

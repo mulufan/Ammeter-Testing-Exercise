@@ -49,6 +49,13 @@ if __name__ == "__main__":
             precision = framework.evaluate_precision(result.analysis)
             precision_results.append(precision)
 
+            # The run's statistics, printed as well as archived and logged. Mean,
+            # median, standard deviation, min and max are the five metrics the
+            # assignment asks for, and without this line a plain `python main.py`
+            # showed only the precision ranking underneath.
+            print()
+            print(result.analysis)
+
             # Archived first, then plotted into the same directory under the same
             # test ID, so a run's JSON and its PNG are found together.
             save_test_run(result)
