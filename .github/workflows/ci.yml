@@ -48,7 +48,12 @@ jobs:
         # has landed, so the step now fails the build.
         run: python scripts/ci_import_check.py
 
-      # Next step for this workflow: once tests exist, add
-      #   - name: Run tests
-      #     run: pytest
-      # after the import check (and add pytest to requirements.txt).
+      - name: Run tests with coverage
+        # Hard gate, and the one that checks behaviour rather than syntax.
+        # Coverage is measured over `src/` - the framework being assessed.
+        # `Ammeters/` is the supplied emulator stand-in for hardware: its
+        # measurements are random by design and it is exercised by running
+        # `main.py`, not by unit tests, so counting it here would report a
+        # number about untested emulators rather than about the framework.
+        run: |
+          pytest --cov=src --cov-report=term-missing --cov-fail-under=85

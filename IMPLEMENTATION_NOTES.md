@@ -5,7 +5,9 @@ the way. Organised by the sections of `Exam/ammeter-test-specification.md`, not 
 Individual bugs are catalogued in [`ISSUES.md`](ISSUES.md); this file records what was
 *done* about them and why.
 
-**Dependencies beyond the standard library: none.**
+**Dependencies beyond the standard library: none at runtime.** `pytest` and `pytest-cov`
+are development-only, for the suite under `tests/` and the CI coverage gate — see
+*Supporting work — the test suite*.
 
 | Assignment section | State |
 | --- | --- |
@@ -523,8 +525,76 @@ The import step carried `continue-on-error: true` because ISS-05 was still unfix
 defect it did not introduce. That fix has since merged, so the line is gone and both steps
 are hard gates.
 
-No placeholder tests were added — a green `pytest` run over zero tests asserts nothing. The
-workflow marks where the `pytest` step goes when Stage 3 produces real tests.
+The workflow previously carried a comment marking where a `pytest` step would go: no
+placeholder tests were added, because a green `pytest` run over zero tests asserts nothing.
+That step now exists — see the next section.
+
+---
+
+## Supporting work — the test suite
+
+**What it delivers.** `pytest` over `tests/`, wired into CI as a blocking step with a
+coverage floor:
+
+```
+pytest --cov=src --cov-report=term-missing --cov-fail-under=85
+```
+
+38 tests, 98% coverage of `src/`, under two seconds. Four files, split by what they check:
+
+| File | Covers |
+| --- | --- |
+| `tests/test_sampling_config.py` | deriving the missing sampling parameter, and rejecting configurations that cannot describe a run |
+| `tests/test_analysis.py` | statistics over known values, the coefficient of variation, and the precision ranking |
+| `tests/test_result_manager.py` | the archive: save → load round trip, listing, comparison, and the damaged-archive errors |
+| `tests/test_run.py` | the sampling loop and one complete run, including per-sample error handling |
+
+**Decision — one seam is stubbed, and it is the socket.** `tests/test_run.py` monkeypatches
+`request_current_from_ammeter`, the single function in the framework that opens a connection,
+and scripts what comes back from it — a float to return, or an exception to raise. Everything
+above that line runs for real: the sampling schedule sleeps, the analysis computes, the run
+writes its log file. Two alternatives were rejected. Mocking the framework's own methods
+(`get_measurement`, `collect_samples`) would have made the tests assert that the test double
+was called, which is a statement about the test rather than about the code. Standing the
+emulators up on real ports would have made the suite an integration test: slow, port-bound,
+and reading random values that no assertion can pin down.
+
+**Decision — the values under test are known by hand, never re-derived from the code.**
+The statistics tests use `[1, 2, 3, 4, 5]`, whose mean is 3, median 3 and sample standard
+deviation √2.5. The sampling tests state the arithmetic they expect (2.7 s at 2 Hz floors to
+5 intervals, so 6 samples over 2.5 s). A test that computes its expectation the same way the
+production code does passes whether or not either is right.
+
+**Decision — coverage is measured over `src/`, not over the whole repository.** `src/` is the
+framework this assignment is assessed on. `Ammeters/` is the supplied stand-in for
+measurement hardware: it returns randomly drawn values by design, and it is exercised by
+running `main.py` end to end, not by unit tests. Folding it in would move the number to 76%
+without any statement about the framework having changed — a coverage figure that mixes
+tested code with code nobody intends to unit-test measures the ratio between them, not
+quality. The floor is 85%; the suite sits at 98%, so the gate has headroom for real work
+rather than being tuned to just clear today's number. No test was written to raise coverage
+alone — the three lines still uncovered in `src/utils/logger.py` are the duplicate-name
+handler-reuse branch and the unused `warning()` passthrough, and `src/utils/Utils.py` is a
+one-line `random.uniform` wrapper. Each would need a test that asserts a wrapper wraps.
+
+**Decision — the coverage flags live in the workflow, not in `pytest.ini`.** `pytest.ini`
+carries only what the suite needs to import at all (`pythonpath = .`, since imports are
+absolute from the repository root and `pytest` on PATH does not add the working directory the
+way `python -m pytest` does). Keeping `--cov-fail-under` in the YAML makes the quality gate
+readable in the file that enforces it, and leaves a bare `pytest` fast for the edit-run loop.
+
+**Found here.** Nothing. The suite documents existing behaviour rather than correcting it;
+every test passed against the code as it stood. That is the honest result for a suite written
+after the fact, and it is worth recording: these tests protect the decisions in the sections
+above from being undone later, they did not find them wrong.
+
+**No test touches the project's own directories.** Runs archive into `tmp_path`, and
+`TestLogger`'s `LOG_DIR` is redirected there too, so the suite never writes to `results/runs/`
+or `results/logs/`.
+
+**Dependencies added.** `pytest` and `pytest-cov`, in `requirements.txt` under a comment
+marking them as test-only. The framework itself still imports nothing beyond the standard
+library, which is the constraint the assignment sets; a test runner is not shipped code.
 
 ---
 
