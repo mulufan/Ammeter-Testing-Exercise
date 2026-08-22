@@ -7,8 +7,8 @@ is the catalogue of what is wrong. Each fix, once applied, is explained in
 `IMPLEMENTATION_NOTES.md`.
 
 Last updated: 2026-08-22. **Status: ISS-01, ISS-02, ISS-04, ISS-05, ISS-07, ISS-08, ISS-09,
-ISS-12, ISS-22, ISS-23 and ISS-24 fixed. ISS-13 and ISS-19 partially addressed. Still open in
-the must-fix list: ISS-03 (partial), ISS-06, ISS-10, ISS-11, ISS-14, ISS-16 and ISS-21.**
+ISS-11, ISS-12, ISS-22, ISS-23 and ISS-24 fixed. ISS-13 and ISS-19 partially addressed. Still
+open in the must-fix list: ISS-03 (partial), ISS-06, ISS-10, ISS-14, ISS-16 and ISS-21.**
 
 **Severity:** 🔴 Blocker (nothing works until fixed) · 🟠 High (wrong or misleading
 behaviour) · 🟡 Medium (fragile, will bite under load or on another OS) · ⚪ Low (polish)
@@ -52,7 +52,7 @@ Two entries the first pass of this triage put in the deferred pile were pulled b
 | [ISS-08](#iss-08) | `config.yaml` | Entire `ammeters:` block commented out | 🟠 | ☑ |
 | [ISS-09](#iss-09) | `logger.py` | Logger never attaches a handler — nothing is logged | 🟠 | ☑ |
 | [ISS-10](#iss-10) | `base_ammeter.py` | No `SO_REUSEADDR` — restart fails with "address in use" | 🟠 | ☐ |
-| [ISS-11](#iss-11) | `base_ammeter.py` | Unknown commands dropped silently, client hangs | 🟠 | ☐ |
+| [ISS-11](#iss-11) | `base_ammeter.py` | Unknown commands dropped silently, client hangs | 🟠 | ☑ |
 | [ISS-12](#iss-12) | `client.py` | No socket timeout and no error handling | 🟠 | ☑ |
 | [ISS-13](#iss-13) | `config.yaml` | All sampling parameters are `NULL` | 🟠 | ◐ |
 | [ISS-14](#iss-14) | README | Documented file paths and names do not exist | 🟡 | ☐ |
@@ -465,6 +465,26 @@ broken" — and combined with ISS-12 (no timeout) this is what makes ISS-01 pres
 hang rather than an error.
 
 *Required fix:* reply with an explicit error response and log the rejected command.
+
+**☑ Fixed — both halves.** The `else` branch sends `UNKNOWN_COMMAND_REPLY`
+(`b"ERROR: unknown command"`) and logs the device, the port and the rejected bytes at WARNING.
+The reply is deliberately non-numeric, so the client's `float()` parse fails and it raises
+`AmmeterResponseError` — "the device answered and refused" rather than the
+`AmmeterConnectionError` of a device that is not there. The commented-out `Connected by`
+print became a `logger.debug`, so connection tracing is available without editing the source.
+
+`%r` on the received bytes keeps the record ASCII whatever a client sends, which matters
+because ISS-24 was exactly this kind of text reaching a non-UTF-8 console.
+
+**Residual:** the client's message is `Invalid response received from ammeter on port N` and
+does not quote the payload, so the "wrong command" versus "device returned garbage"
+distinction is visible on the emulator's side of the console but not in the client's
+exception. Carrying the payload into the error message stays a queued item.
+
+*Verified:* a wrong command returns `b'ERROR: unknown command'` in 0 ms instead of hanging,
+the client raises `AmmeterResponseError`, the warning names the command, the device still
+serves the correct command afterwards, and binary junk (`b"\xff\xfe\x00..."`) is answered
+without killing the thread.
 
 ---
 
