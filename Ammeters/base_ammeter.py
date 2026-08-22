@@ -1,9 +1,14 @@
 import socket
 import time
+import logging
 import random
 from abc import ABC, abstractmethod
 
+logger = logging.getLogger(__name__)
+
 NotImplementedErrorMsg = "Subclasses must implement this property."
+UNKNOWN_COMMAND_REPLY = b"ERROR: unknown command"
+RECV_BUFFER_BYTES = 1024
 
 class AmmeterEmulatorBase(ABC):
     def __init__(self, port: int):
@@ -24,11 +29,19 @@ class AmmeterEmulatorBase(ABC):
                 with conn:
                     # NOTE:(MF), comment this line to avoid printing.
                     # print(f"Connected by {addr}") 
-                    data = conn.recv(1024)
+                    logger.debug("%s accepted a connection from %s",
+                                 self.__class__.__name__, addr)
+                    data = conn.recv(RECV_BUFFER_BYTES)
                     if data == self.get_current_command:
                         # Call the specific measure_current() method defined in subclasses
                         current = self.measure_current()
                         conn.sendall(str(current).encode('utf-8'))
+                    else:
+                        logger.warning(
+                            "%s on port %s rejected an unknown command: %r",
+                            self.__class__.__name__, self.port, data,
+                        )
+                        conn.sendall(UNKNOWN_COMMAND_REPLY)
 
     @property
     @abstractmethod
