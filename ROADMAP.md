@@ -91,7 +91,10 @@ consistently.*
       significant figures, since the devices read orders of magnitude apart. Milestone 5
       replaced the per-device sweep in `main.py` with the comparison table, so median, min
       and max are archived but no longer printed to the console
-- [ ] *(Bonus)* Measurement series over time and per-device distribution plots saved with the run
+- [ ] *(Bonus)* Measurement series over time and per-device distribution plots saved with the
+      run — the measurement series shipped: `src/testing/visualization.py` writes one
+      Matplotlib line plot per run to `results/runs/<test_id>.png`, beside the run's JSON.
+      The per-device **distribution** plots are not done, which is what keeps this unticked
 - [x] *(Bonus)* Performance consistency evaluated with a named variability metric —
       coefficient of variation, delivered with Milestone 5
 - [ ] **Observability:** the five statistics pushed as labelled gauges, with a provisioned Grafana dashboard panel for each
@@ -134,13 +137,15 @@ consistently.*
 *Goal: the assignment's deliverables, complete and accurate.*
 
 - [ ] `README.md` structure, ports and commands match the real repo; install and usage instructions present — ISS-14
-- [ ] `requirements.txt` lists only what is actually imported — ISS-21. The five unused
-      scientific packages are still listed; `pytest` and `pytest-cov` were added on top and
-      are the exception this line does not cover — they are test-only by design and marked
-      as such in the file
+- [ ] `requirements.txt` lists only what is actually imported — ISS-21. Four unused
+      scientific packages are still listed (`matplotlib` left that group when the section 3
+      plot began importing it, and the file now groups runtime, unused and test-only
+      separately); `pytest` and `pytest-cov` were added on top and are the exception this
+      line does not cover — they are test-only by design and marked as such in the file
 - [ ] Sample test results committed (raw samples, statistics, metadata, plots) — one curated
       run per device is committed under `results/samples/` with raw samples, statistics and
-      metadata; the plots are still missing, pending the section 3 visualisation bonus
+      metadata. The plotting code now exists, but no PNG has been committed alongside those
+      three curated runs yet, which is what keeps this unticked
 - [ ] `IMPLEMENTATION_NOTES.md` complete: every fix, every design decision and rejected alternative, every added dependency
 - [ ] Verified on Windows and on at least one POSIX system — CI runs the suite on Linux;
       manual end-to-end verification on a POSIX system is still outstanding
