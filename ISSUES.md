@@ -7,22 +7,44 @@ is the catalogue of what is wrong. Each fix, once applied, is explained in
 `IMPLEMENTATION_NOTES.md`.
 
 Last updated: 2026-08-22. **Status: ISS-01, ISS-02, ISS-04, ISS-05, ISS-07, ISS-08,
-ISS-12, ISS-23 and ISS-24 fixed. ISS-19 partially addressed. Everything else still open.**
+ISS-12, ISS-23 and ISS-24 fixed. ISS-13 and ISS-19 partially addressed. Everything else in
+the must-fix list still open.**
 
 **Severity:** 🔴 Blocker (nothing works until fixed) · 🟠 High (wrong or misleading
 behaviour) · 🟡 Medium (fragile, will bite under load or on another OS) · ⚪ Low (polish)
 
-**Status:** ☐ open · ◐ partially fixed · ☑ fixed
+**Status:** ☐ open · ◐ partially fixed · ☑ fixed · ⏸ deferred
 
 ---
 
-## Summary
+## Triage (2026-08-22)
+
+The catalogue below is the *audit*: everything the read of the supplied repository turned up,
+kept whole. It is deliberately not the same thing as the work list. Six findings have been
+moved to **[deferred](#summary--deferred-nice-to-have)** — real, correctly diagnosed, and judged not
+worth the change against the remaining time. They are latent fragilities rather than active
+faults: nothing in them produces a wrong measurement or a wrong statistic today.
+
+Nothing was deleted. An audit that quietly drops its own findings cannot be told apart from
+an audit that missed them, and the assignment asks for the bugs to be found and explained,
+not only for the code to end up working. Each deferred entry keeps its ID, its anchor and its
+diagnosis, and carries a note saying what accepting it costs.
+
+Two entries the first pass of this triage put in the deferred pile were pulled back:
+
+- **[ISS-21](#iss-21)** — *"minimize external library dependencies"* is a stated Technical
+  Constraint in the specification, so this one is graded directly, and the fix is deleting
+  four lines from `requirements.txt`.
+- **[ISS-16](#iss-16)** — correlated pseudo-random data undermines the statistics that are
+  the entire deliverable. Also a three-line fix.
+
+## Summary — must fix
 
 | ID | Area | Issue | Severity | Status |
 | --- | --- | --- | --- | --- |
 | [ISS-01](#iss-01) | `main.py` | Commented request commands are missing their flags | 🔴 | ☑ |
 | [ISS-02](#iss-02) | Ports | README ports are shifted by one from the actual ports | 🔴 | ☑ |
-| [ISS-03](#iss-03) | `main.py` | Script exits immediately and returns no data | 🔴 | ☐ |
+| [ISS-03](#iss-03) | `main.py` | Script exits immediately and returns no data | 🔴 | ◐ |
 | [ISS-04](#iss-04) | `client.py` | `request_current_from_ammeter()` returns nothing | 🔴 | ☑ |
 | [ISS-05](#iss-05) | `test_framework.py` | `Dict` used but never imported — module cannot import | 🔴 | ☑ |
 | [ISS-06](#iss-06) | `run_tests.py` | `run_test()` called with no argument | 🔴 | ☐ |
@@ -32,18 +54,26 @@ behaviour) · 🟡 Medium (fragile, will bite under load or on another OS) · �
 | [ISS-10](#iss-10) | `base_ammeter.py` | No `SO_REUSEADDR` — restart fails with "address in use" | 🟠 | ☐ |
 | [ISS-11](#iss-11) | `base_ammeter.py` | Unknown commands dropped silently, client hangs | 🟠 | ☐ |
 | [ISS-12](#iss-12) | `client.py` | No socket timeout and no error handling | 🟠 | ☑ |
-| [ISS-13](#iss-13) | `config.yaml` | All sampling parameters are `NULL` | 🟠 | ☐ |
+| [ISS-13](#iss-13) | `config.yaml` | All sampling parameters are `NULL` | 🟠 | ◐ |
 | [ISS-14](#iss-14) | README | Documented file paths and names do not exist | 🟡 | ☐ |
-| [ISS-15](#iss-15) | `config.py` | File opened without explicit encoding | 🟡 | ☐ |
 | [ISS-16](#iss-16) | `base_ammeter.py` | Global RNG reseeded per instance; correlated sequences | 🟡 | ☐ |
-| [ISS-17](#iss-17) | `base_ammeter.py` | Exact byte compare on a single `recv()` | 🟡 | ☐ |
-| [ISS-18](#iss-18) | `base_ammeter.py` | Servers cannot be stopped; one client at a time | 🟡 | ☐ |
-| [ISS-19](#iss-19) | Packaging | No `__init__.py`; imports depend on the working directory | 🟡 | ◐ |
-| [ISS-20](#iss-20) | Protocol | Reply has no framing or delimiter | 🟡 | ☐ |
 | [ISS-21](#iss-21) | `requirements.txt` | Five heavy dependencies, only one is imported | 🟡 | ☐ |
-| [ISS-22](#iss-22) | Emulators | Unconditional `print()` on every measurement | ⚪ | ☐ |
 | [ISS-23](#iss-23) | Design | Devices produce non-comparable magnitudes | 🟡 | ☑ |
 | [ISS-24](#iss-24) | `Greenlee_Ammeter.py` | `Ω` in `print()` kills the thread on a non-UTF-8 console | 🔴 | ☑ |
+
+## Summary — deferred (nice to have)
+
+Found, diagnosed, and consciously not scheduled. The last column is what accepting each one
+costs, so the decision can be re-read later rather than re-argued.
+
+| ID | Area | Issue | Severity | Cost of leaving it |
+| --- | --- | --- | --- | --- |
+| [ISS-15](#iss-15) | `config.py` | File opened without explicit encoding; no validation | 🟡 | Framework runs only from the repo root; a non-ASCII config would mis-decode on Windows |
+| [ISS-17](#iss-17) | `base_ammeter.py` | Exact byte compare on a single `recv()` | 🟡 | A split TCP segment or a trailing newline reads as an unknown command |
+| [ISS-18](#iss-18) | `base_ammeter.py` | Servers cannot be stopped; one client at a time | 🟡 | Blocks the structural half of ISS-03 and the framework-controlled emulator lifecycle |
+| [ISS-19](#iss-19) | Packaging | No `__init__.py`; imports depend on the working directory | 🟡 | `__init__.py` done; the CWD-relative `config_path` remains, with ISS-15 |
+| [ISS-20](#iss-20) | Protocol | Reply has no framing or delimiter | 🟡 | Same class as ISS-17; safe only because replies are short and loopback is reliable |
+| [ISS-22](#iss-22) | Emulators | Unconditional `print()` on every measurement | ⚪ | stdout floods during a run, and the I/O sits inside the timed sampling loop |
 
 ---
 
@@ -155,12 +185,16 @@ and print the result; keep the process alive while doing so.
 
 *Verify:* `python main.py` prints one current reading per ammeter and exits cleanly.
 
-*Progress (2026-08-18):* the verification criterion now passes — `main.py` calls
-`AmmeterTestFramework.get_measurement()` for each device and prints three `Measurement`s.
-Left open deliberately, because the structural half is untouched: the fixed `time.sleep(5)`
-and the trailing `pass` are still there. The sleep is a workaround for ISS-10
-(`SO_REUSEADDR`) and the absence of a readiness signal (ISS-18); deleting it without those
-replaces a slow start with a race.
+**◐ Partially fixed.** The verification criterion above passes — `main.py` calls
+`AmmeterTestFramework.get_measurement()` for each device and prints three `Measurement`s, and
+the trailing `pass` is gone. The structural half is untouched: the fixed `time.sleep(5)` is
+still there. The sleep is a workaround for ISS-10 (`SO_REUSEADDR`) and the absence of a
+readiness signal (ISS-18); deleting it without those replaces a slow start with a race.
+
+*Triage note (2026-08-22):* ISS-10 stays on the must-fix list, but ISS-18 is now deferred, so
+the readiness signal is not coming. The `sleep(5)` therefore stands as an accepted cost — five
+seconds of startup on a program that then runs for two — rather than as work still queued. If
+that is not acceptable, ISS-18 has to come back with it.
 
 ---
 
@@ -461,6 +495,18 @@ parse to `None`.
 *Required fix:* provide working defaults and define the precedence rule explicitly in
 config and in the README.
 
+**◐ Partially fixed.** The `sampling:` block now carries real defaults — `measurements_count: 5`,
+`total_duration_seconds: 2`, `sampling_frequency_hz: 2` — and the rule is implemented and
+documented: the three are over-determined, so any two derive the third and a contradictory
+trio is rejected, which is stricter than the precedence rule this issue asked for and does not
+silently discard whatever the operator wrote in the losing field.
+
+**Still open:** the other half of this issue, the empty keys. `analysis.statistical_metrics`,
+`analysis.visualization.plot_types` and `result_management:` all still parse to `None`, and
+the analysis layer hardcodes its metric set rather than reading the first of them. This is the
+gap the roadmap's Milestone 3 note refers to; it is tracked here rather than as a new ID
+because it is the same defect the original audit recorded.
+
 ---
 
 ## 🟡 Medium
@@ -485,6 +531,12 @@ The "Usage" heading is also empty and immediately followed by a duplicate
 
 ### ISS-15
 **Config file opened without an explicit encoding**
+
+> **⏸ Deferred — nice to have.** `config/config.yaml` is pure ASCII, so the encoding bug is
+> latent: it fires the day someone puts a non-ASCII device name in the registry. Accepting it
+> also accepts ISS-19's remaining half, folded in here — `config_path` stays CWD-relative, so
+> the framework runs only from the repo root. That is a usage constraint, not a silent
+> failure, and it belongs in the README (ISS-14) instead of in code.
 
 *Location:* `src/utils/config.py:8`
 
@@ -529,6 +581,12 @@ independently.
 ### ISS-17
 **Exact byte comparison against a single `recv()`**
 
+> **⏸ Deferred — nice to have.** The commands are short, fixed, and sent in one `sendall`
+> over loopback, where the kernel has never split one in practice. It is a real property of
+> TCP rather than a bug that fires today, and it only becomes reachable if the protocol grows
+> or leaves localhost. Pairs with ISS-20 — both are the same missing delimiter, seen from the
+> two ends — so if either is ever done, both should be.
+
 *Location:* `Ammeters/base_ammeter.py:26-27`
 
 `data == self.get_current_command` compares raw bytes with no `.strip()`, so a trailing
@@ -541,6 +599,15 @@ TCP is a stream and may split it.
 
 ### ISS-18
 **Servers cannot be stopped, and serve one client at a time**
+
+> **⏸ Deferred — nice to have, and the one deferral with a visible consequence.** The daemon
+> threads do let the process exit cleanly, and sampling is sequential, so the queueing costs
+> nothing at one client. What it blocks is elsewhere: the structural half of ISS-03 stays
+> open, because removing `main.py`'s `sleep(5)` needs the readiness signal this issue would
+> provide, and the Milestone 1 roadmap item *"emulator start/stop controllable from the
+> framework"* cannot be ticked. The accept loop also still has no error boundary, so any
+> exception inside `measure_current()` kills that device for the life of the process —
+> ISS-24 was one instance of exactly that.
 
 *Location:* `Ammeters/base_ammeter.py:22-30`
 
@@ -558,6 +625,11 @@ client resolves to IPv4 — bind explicitly to `127.0.0.1`.
 
 ### ISS-19
 **No `__init__.py`; imports depend on the working directory**
+
+> **⏸ Deferred — remaining half only.** The packaging half is done and stays done: all four
+> directories are regular packages. What is deferred is the CWD-relative `config_path`, which
+> was folded into ISS-15 so the path, the missing-file error and the schema check would land
+> as one change. Deferring ISS-15 therefore defers this too.
 
 *Location:* `Ammeters/`, `src/`, `src/utils/`, `src/testing/`
 
@@ -585,6 +657,11 @@ still fails on `sys.path` (ISS-06).
 
 ### ISS-20
 **The wire protocol has no framing**
+
+> **⏸ Deferred — nice to have.** The reply is a short float rendered as text, well under one
+> segment, and the server closes the connection after it — which is the framing, implicitly.
+> It holds on loopback and would not hold over a real network. Same missing delimiter as
+> ISS-17; do them together or not at all, since changing one end alone breaks the protocol.
 
 *Location:* `Ammeters/base_ammeter.py:30`, `Ammeters/client.py:8`
 
@@ -647,6 +724,13 @@ ten terms averages the spread down by √10.
 
 ### ISS-22
 **Unconditional printing on every measurement**
+
+> **⏸ Deferred — nice to have.** Noisy, and the write does sit inside the loop whose timing
+> the framework measures, but it produces no wrong reading and no wrong statistic. The
+> measured drift with the prints in place is 11 ms worst case at 2 Hz, well inside tolerance.
+> Note that ISS-09 (the logger) *is* scheduled: once a working logger exists, converting
+> these four `print()` calls to `logger.debug` is a few lines, so this is worth doing
+> opportunistically on that branch rather than as work of its own.
 
 *Location:* `Greenlee_Ammeter.py:15`, `Entes_Ammeter.py:15`, `Circutor_Ammeter.py:16,18`
 

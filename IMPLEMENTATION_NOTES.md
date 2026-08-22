@@ -445,23 +445,42 @@ workflow marks where the `pytest` step goes when Stage 3 produces real tests.
 
 ## Open items
 
+Split by intent. **Queued** items are work still meant to happen; **⏸ deferred** items were
+taken off the work list by the [triage in `ISSUES.md`](ISSUES.md#triage-2026-08-22) and are
+recorded as accepted costs, not as a backlog. The distinction matters when reading this file
+later: a known limitation that someone decided to keep is a different statement from one
+nobody has got to yet.
+
+**⏸ Deferred.**
+
 - `config_path` is CWD-relative and the config is never validated against a schema
-  ([ISS-15](ISSUES.md#iss-15)) — the path fix and the missing-file handling should land
-  together rather than half in two places.
+  ([ISS-15](ISSUES.md#iss-15)), so the framework runs from the repo root only. The path fix
+  and the missing-file handling were kept together deliberately rather than landing half in
+  two places; deferring one defers both, along with the remaining half of
+  [ISS-19](ISSUES.md#iss-19).
+- `main.py` keeps the supplied `sleep(5)`. The trailing `pass` is gone, but removing the
+  sleep needs a readiness signal, which is [ISS-18](ISSUES.md#iss-18) and deferred. Five
+  seconds of startup on a program that then runs for two is the accepted cost.
+  [ISS-10](ISSUES.md#iss-10) is *not* deferred and removes the other reason the sleep exists.
+- An exception raised inside `measure_current()` still escapes the accept loop and kills the
+  emulator thread for the rest of the process ([ISS-18](ISSUES.md#iss-18)). ISS-24 was one
+  way to trigger it; the loop has no error boundary of its own. This is the deferral with the
+  sharpest edge — a device can still die mid-run — mitigated by `main.py` catching per device
+  so the other two finish.
+- The emulators still `print()` their internals on every measurement
+  ([ISS-22](ISSUES.md#iss-22)): stdout floods during a run, and the write sits inside the loop
+  whose timing section 2 measures. Worth folding into the ISS-09 logger branch if it is cheap
+  there.
+
+**Queued.**
+
 - `main.py` still hardcodes the ports it *binds*, so `config.yaml` is the single source of
   truth for the client half only ([ISS-08](ISSUES.md#iss-08)).
-- `main.py` keeps the supplied `sleep(5)`; the trailing `pass` is gone, but removing the
-  sleep needs a readiness signal and a shutdown path ([ISS-10](ISSUES.md#iss-10),
-  [ISS-18](ISSUES.md#iss-18)), not just deletion.
 - The default `measurements_count: 5` is a demo-speed setting, not a measurement one: at
   n=5 the coefficient of variation is too noisy to separate the three devices (section 5).
   Raising it to `50 / 4.9 s / 10 Hz` is the fix when the ranking needs to mean something.
 - `AmmeterResponseError` names the port but not the offending payload — recoverable from the
   chained traceback, absent from the line an operator actually reads.
-- The emulators still `print()` their internals on every measurement
-  ([ISS-22](ISSUES.md#iss-22)). ISS-24 made that line dangerous on a non-UTF-8 console and is
-  fixed, but the flood — and the I/O cost inside the timed sampling path — waits on the
-  logger ([ISS-09](ISSUES.md#iss-09)).
-- An exception raised inside `measure_current()` still escapes the accept loop and kills the
-  emulator thread for the rest of the process ([ISS-18](ISSUES.md#iss-18)). ISS-24 was one
-  way to trigger it; the loop has no error boundary of its own.
+- `analysis.statistical_metrics`, `analysis.visualization.plot_types` and `result_management:`
+  are still empty keys that parse to `None`, and the analysis layer hardcodes its metric set
+  ([ISS-13](ISSUES.md#iss-13), the half of it that is not fixed).
