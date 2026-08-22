@@ -1,5 +1,12 @@
+import logging
+
 from Ammeters.base_ammeter import AmmeterEmulatorBase
 from src.utils.Utils import generate_random_float
+
+# No handler is attached here: an emulator is a library, and choosing where its
+# output goes belongs to whatever is running it. A driver that wants these lines
+# calls logging.basicConfig(level=logging.DEBUG); otherwise they cost nothing.
+logger = logging.getLogger(__name__)
 
 
 class GreenleeAmmeter(AmmeterEmulatorBase):
@@ -12,8 +19,10 @@ class GreenleeAmmeter(AmmeterEmulatorBase):
         voltage = generate_random_float(1.0, 10.0)  # Random voltage (1V - 10V)
         resistance = generate_random_float(0.1, 100.0)  # Random resistance (0.1 Ohm - 100 Ohm)
         current = voltage / resistance
-        # "Ohm", not the U+03A9 sign: this line is written to whatever console the
-        # operator happens to have, and a non-UTF-8 code page (cp1255, cp1252, ...)
-        # raises UnicodeEncodeError here, out of the accept loop, killing the thread.
-        print(f"Greenlee Ammeter - Voltage: {voltage}V, Resistance: {resistance} Ohm, Current: {current}A")
+        # "Ohm", not the U+03A9 sign (ISS-24): a non-UTF-8 console raises
+        # UnicodeEncodeError inside the handler, and this text may still reach one.
+        logger.debug(
+            "Greenlee Ammeter - Voltage: %sV, Resistance: %s Ohm, Current: %sA",
+            voltage, resistance, current,
+        )
         return current

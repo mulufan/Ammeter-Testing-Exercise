@@ -1,5 +1,10 @@
+import logging
+
 from Ammeters.base_ammeter import AmmeterEmulatorBase
 from src.utils.Utils import generate_random_float
+
+# See Greenlee_Ammeter: no handler here, the running program decides.
+logger = logging.getLogger(__name__)
 
 
 class CircutorAmmeter(AmmeterEmulatorBase):
@@ -13,7 +18,11 @@ class CircutorAmmeter(AmmeterEmulatorBase):
         time_step = generate_random_float(0.001, 0.01)  # Time step (0.001s - 0.01s)
         voltages = [generate_random_float(0.1, 1.0) for _ in range(num_samples)]  # Voltage values
 
-        print(f"CIRCUTOR Ammeter - Voltages: {voltages}, Time Step: {time_step}s")
         current = sum(v * time_step for v in voltages)
-        print(f"Current: {current}A")
+        # One record instead of the supplied two: the pair straddled the summation, so
+        # a concurrent device's line could land between a reading and its own current.
+        logger.debug(
+            "CIRCUTOR Ammeter - Voltages: %s, Time Step: %ss, Current: %sA",
+            voltages, time_step, current,
+        )
         return current

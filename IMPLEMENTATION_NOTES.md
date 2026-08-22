@@ -54,9 +54,9 @@ next non-ASCII character added anywhere would fail the same way on a machine wit
 override. Wrapping the accept loop in a blanket `except Exception` would keep the thread
 alive through a crash it should not be having, and belongs with the emulator lifecycle work
 ([ISS-11](ISSUES.md#iss-11), [ISS-18](ISSUES.md#iss-18)) rather than being bolted on here.
-The print itself is still unconditional and still floods stdout during sampling; removing it
-is [ISS-22](ISSUES.md#iss-22), which waits on the logger ([ISS-09](ISSUES.md#iss-09)). This
-fix makes the line safe, not absent.
+The print itself was still unconditional when this landed; removing it was
+[ISS-22](ISSUES.md#iss-22), waiting on the logger ([ISS-09](ISSUES.md#iss-09)) and delivered
+with it — see *Supporting work — run logging*. This fix made the line safe, not absent.
 
 **Verified.** `python main.py` on this machine's `cp1255` console, with no environment
 override: five Greenlee samples and all three devices in the comparison table. The same
@@ -164,8 +164,9 @@ sleeps until each sample's target time and takes one reading.
 **Known limits.** Overrun is not recorded: when a round trip is longer than the period the
 loop free-runs, and 50 samples requested at 1000 Hz ran at an effective 61.6 Hz with nothing
 logged. Skipped samples are not tallied, so a short result list is indistinguishable from a
-short configuration. Errors go to stdout via `print`, interleaving with results, until the
-logger (ISS-09) is built.
+short configuration. Errors went to stdout via `print`, interleaving with results, until the
+logger ([ISS-09](ISSUES.md#iss-09)) was built; `collect_samples` now takes an optional
+`logger` and records a skip as a warning and an abort as an error.
 
 **Verified.** `python main.py` — 5 samples from each of the three devices, ~0.5 s apart. The
 per-device guard was verified against ISS-24 while it was still open: on a `cp1255` console
@@ -424,6 +425,79 @@ line up under their headers. `compileall` and `scripts/ci_import_check.py` both 
 
 ---
 
+## Supporting work — run logging
+
+**What it delivers.** Every call to `run_test` writes its own file under `results/logs/`,
+named `<UTC timestamp>_<device>_<first 8 of the run ID>.log`. It carries the run ID, the
+resolved sampling configuration, one DEBUG line per sample, any skipped or failed sample, and
+the statistics block as archived — so a run's log answers *what did this measure* without
+opening the JSON.
+
+**Bugs fixed.** [ISS-09](ISSUES.md#iss-09) — `_setup_logger` created the directory, computed a
+filename and then returned a bare logger. No handler, no formatter, no level, so `log_file`
+was a dead variable and every `info()` and `debug()` was discarded against the inherited
+WARNING. · [ISS-22](ISSUES.md#iss-22) — the emulators' per-measurement `print()` calls became
+`logger.debug`, which is what a working logger made cheap.
+
+**Decisions.**
+
+- **Detail to the file at DEBUG, warnings and errors to stderr.** The console keeps only what
+  an operator must act on; the sample-by-sample record goes where it can be read afterwards.
+  stderr rather than stdout so diagnostics never interleave with the result tables — which is
+  half of what made the old `print()` output unusable during a run.
+- **One logger, one file, one run.** The name carries the device and a short run ID, so
+  concurrent or repeated runs cannot land in the same file, and a log can be tied back to its
+  JSON archive by ID.
+- **A repeated name adopts the file it already owns rather than adding a second handler.**
+  `getLogger` returns the *same* object for a repeated name, so the naive fix writes every
+  line twice — the failure mode ISS-09 explicitly called out. `log_file` is then corrected to
+  the file actually being written, rather than pointing at one that will stay empty.
+- **`propagate = False`.** Without it, a caller who configures the root logger receives every
+  line a second time.
+- **`encoding="utf-8"` on the file handler**, never the platform default. ISS-24 was this
+  exact class of bug one layer up; a log written on Windows has to be readable on Linux.
+- **The directory is resolved from `__file__`.** `"results/logs"` relative to the CWD follows
+  the caller, which is how `result_manager` grew a second archive tree before that was fixed.
+  The two constants are twins by design. They are *not* shared through a common module, which
+  would have meant editing a reviewed, working file for a one-line expression; noted below as
+  queued rather than done quietly.
+- **`close()` and context-manager support.** One run is one open file handle. On Windows an
+  unclosed handler holds a lock on the file, and a long-lived process accumulates them.
+  `run_test` uses `with`, so the handle is released even when the run raises.
+- **UTC in the filename and in every record**, with the formatter's converter set to
+  `time.gmtime`. Measurements are archived in UTC; a log line that cannot be lined up against
+  a sample timestamp is worth much less.
+- **`%s` placeholders, not f-strings.** A record filtered out by level is never formatted.
+  This matters most in the emulators, whose DEBUG lines are unhandled by default.
+- **The emulators log without attaching a handler.** They are the device under test, and
+  choosing a destination for their output is the running program's job:
+  `logging.basicConfig(level=logging.DEBUG)` reveals them.
+- **`base_ammeter`'s startup `print` stays a `print`.** Once per process, not part of the
+  flood, and currently the only signal the servers came up — sending it to an unhandled logger
+  would silence the one line an operator waits for. It moves when ISS-18 provides a real
+  readiness signal.
+- **A failed run is logged where the context is known, then re-raised unchanged.** How to
+  handle a failed run is the caller's decision, not `run_test`'s.
+
+**Known limits.** Each run interns a new `Logger` in `logging`'s global registry, and closing
+the handlers does not remove it — an unbounded but very small growth in a process that runs
+thousands of tests. `run_test` still resolves the sampling configuration twice, once for the
+metadata and once inside `collect_samples`; harmless, since the resolution is pure, but the
+log reports the first. Nothing rotates or prunes `results/logs/`.
+
+**Verified.** `python main.py` writes three non-empty logs, one per device, and the console is
+now only the startup lines plus the comparison table. A 16-check suite covers: the duplicate
+name guard (one file, two handlers, no doubled lines), `close()` releasing the handle on
+Windows, the context manager closing on an exception, UTF-8 bytes for `Ω` and Hebrew written
+from a `cp1255` console, DEBUG and WARNING both reaching the file, the log landing under the
+project root when the CWD is elsewhere with no stray tree beside the caller, a junk-replying
+stub server producing a logged warning and a run that continues with 2 of 3 samples, a dead
+port logging both `Sampling aborted` and `failed: AmmeterConnectionError` before propagating,
+and the emulator DEBUG records still reachable through `basicConfig`. `compileall` and
+`scripts/ci_import_check.py` clean.
+
+---
+
 ## Supporting work — continuous integration
 
 `.github/workflows/ci.yml` runs on every pull request to `master`: install requirements,
@@ -467,15 +541,19 @@ nobody has got to yet.
   way to trigger it; the loop has no error boundary of its own. This is the deferral with the
   sharpest edge — a device can still die mid-run — mitigated by `main.py` catching per device
   so the other two finish.
-- The emulators still `print()` their internals on every measurement
-  ([ISS-22](ISSUES.md#iss-22)): stdout floods during a run, and the write sits inside the loop
-  whose timing section 2 measures. Worth folding into the ISS-09 logger branch if it is cheap
-  there.
+*(The emulator print flood, [ISS-22](ISSUES.md#iss-22), was on this list and has since been
+fixed — it turned out to be a few lines once the ISS-09 logger existed, which is exactly the
+condition the deferral named.)*
 
 **Queued.**
 
 - `main.py` still hardcodes the ports it *binds*, so `config.yaml` is the single source of
   truth for the client half only ([ISS-08](ISSUES.md#iss-08)).
+- `PROJECT_ROOT` is defined twice, in `src/utils/logger.py` and `src/testing/result_manager.py`.
+  A shared constant is the right end state; it was not done here because it means editing a
+  reviewed working module for a one-line expression, and that belongs in its own change.
+- Nothing prunes or rotates `results/logs/`, and each run interns a `Logger` that closing the
+  handlers does not remove.
 - The default `measurements_count: 5` is a demo-speed setting, not a measurement one: at
   n=5 the coefficient of variation is too noisy to separate the three devices (section 5).
   Raising it to `50 / 4.9 s / 10 Hz` is the fix when the ranking needs to mean something.
