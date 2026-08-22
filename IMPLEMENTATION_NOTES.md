@@ -25,8 +25,8 @@ suite under `tests/` and the CI coverage gate — see *Supporting work — the t
 ## Groundwork — making the supplied code run
 
 **What it delivers.** `python main.py` reaches all three emulators and gets a reading back.
-As supplied it got nothing: the client calls were commented out, and would not have worked
-if uncommented.
+As supplied it got nothing: only one emulator was ever started, and the client calls were
+commented out and would not have worked if uncommented.
 
 **Bugs fixed.** [ISS-01](ISSUES.md#iss-01) — the commented calls sent bare device names
 (`b'MEASURE_GREENLEE'`), but each emulator compares the received bytes for *exact* equality
@@ -73,9 +73,23 @@ from the other direction. What it does not do is carry the payload into the clie
 message, so the "wrong command" versus "garbage reply" distinction lives on the emulator's
 console; that remains queued.
 
+**Two of the three emulators were never started.** [ISS-25](ISSUES.md#iss-25) — the
+`threading.Thread(...).start()` lines for ENTES and CIRCUTOR were commented out in the
+supplied `main.py`, beneath a comment aimed at the client calls below them, and were never
+uncommented as the framework grew on top. The symptom was misleading rather than obvious:
+Greenlee measured normally and the other two failed with `WinError 10061 ... actively
+refused it`, which is what a firewall or a port conflict looks like, while the run still
+finished and printed a one-row comparison table. It was found by running `main.py` to
+capture real console output for the README, which is the argument for quoting real output
+in documentation instead of writing plausible output by hand. All three threads now start;
+the stale comment block and the commented per-device `request_current_from_ammeter` calls
+were deleted with it, since the config-driven API reaches the same devices and those lines
+only preserved ISS-01's wrong commands.
+
 **Verified.** `python main.py` on this machine's `cp1255` console, with no environment
-override: five Greenlee samples and all three devices in the comparison table. The same
-command before the change lost Greenlee to `UnicodeEncodeError` and ranked two devices.
+override: three startup lines, three archived runs with a JSON, a PNG and a log each, and
+all three devices in the comparison table. Before the ISS-24 fix the same command lost
+Greenlee to `UnicodeEncodeError`; before the ISS-25 fix it reached only Greenlee.
 `Ammeters/`, `src/` and `main.py` now contain no non-ASCII on any console path; what remains
 is Hebrew comments and docstrings in `src/utils/` and `examples/`, which are never printed.
 
@@ -637,6 +651,44 @@ or `results/logs/`.
 **Dependencies added.** `pytest` and `pytest-cov`, in `requirements.txt` under a comment
 marking them as test-only. The framework itself still imports nothing beyond the standard
 library, which is the constraint the assignment sets; a test runner is not shipped code.
+
+---
+
+## Supporting work — documentation
+
+**What it delivers.** The assignment's deliverables 2, 3 and 4: a README a reviewer can read
+end to end, the committed sample results, and this file.
+
+**Decision — the README covers usage, architecture and the final solution; nothing else.**
+It was rewritten rather than patched ([ISS-14](ISSUES.md#iss-14)). The division of labour
+between the three documents is deliberate: the README says *what the thing is and how to run
+it*, this file says *why it was built that way*, and [`ISSUES.md`](ISSUES.md) says *what was
+wrong with the supplied code*. Per-function documentation stays in the docstrings, which are
+where a reader is already looking; the README describing every helper would be a second copy
+to keep in sync, and the first one to rot.
+
+**Decision — one Mermaid diagram, not a diagram per layer.** Mermaid renders natively on
+GitHub, so the picture needs no committed image and no build step. It shows the one path that
+matters — emulators → client → framework → sampling → analysis → archive / plot / log — with the
+config feeding the framework as a dashed edge, since it parameterises the flow rather than
+sitting in it.
+
+**Decision — Prometheus and Grafana are not in the diagram.** The stack is planned in
+[`ROADMAP.md`](ROADMAP.md) and no metrics are exported today. A diagram that draws intended
+components beside real ones cannot be trusted for either, so the README names the gap in
+*Known gaps* instead.
+
+**Decision — three curated sample runs, not the whole archive.** `results/runs/` and
+`results/logs/` are machine-written, UUID-named and unbounded; committing them would put every
+local run in the diff and leave a reviewer to guess which one to open. `results/samples/`
+holds one run per device — raw samples, statistics, metadata and now the matching PNG,
+rendered from the committed JSON through `load_test_run` and `plot_measurement_series` so the
+plot provably belongs to that run. `.gitignore` already encodes the split
+(`results/*`, `!results/samples/`).
+
+**Verified.** Every path, port, command and relative link in the README checked against the
+tree; the console output it quotes is copied from a real `python main.py` run, not written by
+hand. That check is what turned up [ISS-25](ISSUES.md#iss-25).
 
 ---
 

@@ -7,8 +7,9 @@ is the catalogue of what is wrong. Each fix, once applied, is explained in
 `IMPLEMENTATION_NOTES.md`.
 
 Last updated: 2026-08-22. **Status: ISS-01, ISS-02, ISS-04, ISS-05, ISS-07, ISS-08, ISS-09,
-ISS-11, ISS-12, ISS-22, ISS-23 and ISS-24 fixed. ISS-13 and ISS-19 partially addressed. Still
-open in the must-fix list: ISS-03 (partial), ISS-06, ISS-10, ISS-14, ISS-16 and ISS-21.**
+ISS-11, ISS-12, ISS-14, ISS-22, ISS-23, ISS-24 and ISS-25 fixed. ISS-13 and ISS-19 partially
+addressed. Still open in the must-fix list: ISS-03 (partial), ISS-06, ISS-10, ISS-16 and
+ISS-21.**
 
 **Severity:** 🔴 Blocker (nothing works until fixed) · 🟠 High (wrong or misleading
 behaviour) · 🟡 Medium (fragile, will bite under load or on another OS) · ⚪ Low (polish)
@@ -55,12 +56,13 @@ Two entries the first pass of this triage put in the deferred pile were pulled b
 | [ISS-11](#iss-11) | `base_ammeter.py` | Unknown commands dropped silently, client hangs | 🟠 | ☑ |
 | [ISS-12](#iss-12) | `client.py` | No socket timeout and no error handling | 🟠 | ☑ |
 | [ISS-13](#iss-13) | `config.yaml` | All sampling parameters are `NULL` | 🟠 | ◐ |
-| [ISS-14](#iss-14) | README | Documented file paths and names do not exist | 🟡 | ☐ |
+| [ISS-14](#iss-14) | README | Documented file paths and names do not exist | 🟡 | ☑ |
 | [ISS-16](#iss-16) | `base_ammeter.py` | Global RNG reseeded per instance; correlated sequences | 🟡 | ☐ |
 | [ISS-21](#iss-21) | `requirements.txt` | Five heavy dependencies, only one is imported | 🟡 | ☐ |
 | [ISS-22](#iss-22) | Emulators | Unconditional `print()` on every measurement | ⚪ | ☑ |
 | [ISS-23](#iss-23) | Design | Devices produce non-comparable magnitudes | 🟡 | ☑ |
 | [ISS-24](#iss-24) | `Greenlee_Ammeter.py` | `Ω` in `print()` kills the thread on a non-UTF-8 console | 🔴 | ☑ |
+| [ISS-25](#iss-25) | `main.py` | Two of the three emulator threads never started | 🔴 | ☑ |
 
 ## Summary — deferred (nice to have)
 
@@ -338,6 +340,38 @@ is now closed.
 
 ---
 
+### ISS-25
+**Two of the three emulator threads were never started**
+
+> **☑ Fixed.** Found while verifying the documentation against a real run: the run
+> reported two devices as unreachable, which read as an environment problem and was not.
+
+*Location:* `main.py:27-29` (as supplied)
+
+Only the Greenlee thread was started. The ENTES and CIRCUTOR `threading.Thread(...).start()`
+lines were commented out in the supplied file, under a comment saying the section "shouldn't
+work" — that comment was aimed at the client calls below it, but it covered the thread lines
+too, and they were never uncommented as the framework grew.
+
+The result was worse than an obvious break. `python main.py` started, printed one startup
+line, and then failed *only* on ports 5002 and 5003 with
+`WinError 10061 ... actively refused it` — which looks exactly like a firewall or a port
+conflict. The comparison table still rendered, with one device in it, so a run looked
+successful at a glance.
+
+*Required fix:* start all three emulator threads; delete the stale comment and the supplied
+per-device client calls, which the unified API replaced.
+
+**☑ Fixed.** All three threads start. The commented `request_current_from_ammeter` calls and
+the now-unused import went with them: the framework reaches the same devices through the
+config registry, so the per-device calls had no remaining purpose and only restated ISS-01's
+wrong command strings.
+
+*Verified:* `python main.py` prints three startup lines and a three-row comparison table, and
+archives a JSON, a PNG and a log per device.
+
+---
+
 ## 🟠 High
 
 ### ISS-07
@@ -577,6 +611,16 @@ The "Usage" heading is also empty and immediately followed by a duplicate
 `# Ammeter Emulators` title.
 
 *Required fix:* rewrite the structure section to match reality (Milestone 6).
+
+**☑ Fixed.** The README was rewritten around the finished solution rather than patched: a
+component table generated from the real file map, the correct ports and commands, an
+architecture diagram, the sampling rule, where results are written, the design decisions in
+brief, and the precision-is-not-accuracy limitation stated in its own section. The duplicate
+title and the empty "Usage" heading are gone. Depth stays in `IMPLEMENTATION_NOTES.md`; the
+README links to it rather than repeating it.
+
+*Verified:* every path, port, command and file link in the README checked against the tree,
+and the quoted console output is from a real `python main.py` run.
 
 ---
 
