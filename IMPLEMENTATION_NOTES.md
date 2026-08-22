@@ -1,7 +1,7 @@
 # Implementation Notes
 
 How each part of the assignment was built, the decisions behind it, and the bugs fixed on
-the way. Organised by the sections of `Exam/ammeter-test-specification.md`, not by date.
+the way. Organised by the sections of the assignment's Problem Statement, not by date.
 Individual bugs are catalogued in [`ISSUES.md`](ISSUES.md); this file records what was
 *done* about them and why.
 

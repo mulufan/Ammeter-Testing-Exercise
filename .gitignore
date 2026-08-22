@@ -19,6 +19,9 @@ htmlcov/
 # ignore pdf and other additional learning files
 *.pdf
 
+# The README describes the task in its own words instead.
+Exam/
+
 # Generated run artefacts. The archive under results/runs/ is machine-written,
 # UUID-named and unbounded - every local run would otherwise land in the diff -
 # and results/logs/ is the same. The curated sample runs under results/samples/
