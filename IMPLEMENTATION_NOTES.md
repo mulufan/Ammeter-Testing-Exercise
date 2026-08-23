@@ -315,7 +315,31 @@ statistics. `src/testing/result_manager.py` archives it as one JSON file per run
 run; until the section 3 plot needed a JSON file to sit beside, the archive was only ever
 written by hand or by the tests.
 
+**The command line (added after review).** The retrieval half of this section existed as a
+Python API and nothing else: `main.py` took no arguments, so every invocation did the same
+thing and a reader who ran the project the documented way never learned the archive could be
+queried. `main.py` now takes `--list`, `--show <test_id>` and `--compare <id> <id>`, wired
+straight to `list_test_runs`, `load_test_run` and `compare_test_runs`. No storage logic moved
+or was duplicated — the options are `argparse` plus a print loop.
+
 **Decisions.**
+
+- **The archive options skip the emulators entirely.** They are pure file reads, so starting
+  three socket servers and sleeping five seconds for them to bind would be five seconds of
+  latency to display data already on disk — and would fail on a machine where the ports are
+  taken, for a command that never opens a socket.
+- **A bare `python main.py` is unchanged.** The options are mutually exclusive and all
+  optional, so the default path is the same live run as before; the CLI is a way *in* to
+  existing behaviour, not a new mode. The one addition to its output is a closing line naming
+  `--list`, without which the archive stays discoverable only by reading the source.
+- **`--list` prints full run IDs, not the short form.** The `--compare` table abbreviates a
+  run to its first UUID block, which is enough to tell rows apart but cannot be typed back
+  in. Listing is the command whose output is meant to be copied from, so it prints IDs in
+  full rather than making the reader resolve a prefix.
+- **`FileNotFoundError` and `ResultStoreError` become a one-line message and a non-zero
+  exit.** An unknown ID is ordinary user error and does not warrant a traceback. The
+  distinction the storage layer draws — never archived versus archived but unreadable —
+  survives in the message text.
 
 - **One JSON file per run, named by run ID.** Human-readable and diffable, no index file to
   fall out of step with the directory, and a UUID4 name means a run cannot overwrite another.
