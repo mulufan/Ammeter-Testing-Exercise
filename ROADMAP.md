@@ -115,7 +115,9 @@ consistently.*
 - [x] Raw samples persisted, not only the computed summary
 - [x] Past runs can be listed, retrieved by ID, and compared side by side — listing returns
       `RunSummary` ordered by start time; comparison renders archived statistics as a table
-      and computes nothing across runs
+      and computes nothing across runs. Reachable from the command line via
+      `main.py --list / --show <id> / --compare <id> <id>`, which read the archive without
+      starting the emulators
 - [x] Portable, human-readable storage under `results/` (JSON and/or CSV) — one JSON file per
       run, path resolved from the project root; JSON only, no CSV export
 

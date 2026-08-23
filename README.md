@@ -159,6 +159,28 @@ Every run is written under `results/`, keyed by its UUID `test_id`:
 | `results/runs/<test_id>.png` | Measured current against sample timestamp |
 | `results/logs/<time>_<device>_<id>.log` | That run's log, DEBUG detail per sample |
 
+### Reading past runs
+
+`main.py` takes three options that read the archive back. They only open files — no
+emulator is started and there is no startup wait:
+
+```sh
+python main.py --list                     # every archived run, oldest first
+python main.py --show <test_id>           # one run: metadata, statistics, raw samples
+python main.py --compare <id_a> <id_b>    # archived runs side by side
+```
+
+`--list` prints the full `test_id` of each run, which is what `--show` and `--compare`
+take. An unknown or unreadable ID exits non-zero with a single-line error.
+
+```
+$ python main.py --list
+f04f3be2-9133-41ee-91b5-726603f3a265  greenlee   2026-08-22 22:39:14 UTC  5 sample(s)  mean 0.601849 A
+bce85dcb-c379-4c2e-9552-bd3dec398931  entes      2026-08-22 22:39:16 UTC  5 sample(s)  mean 65.3259 A
+```
+
+Running `main.py` with no options behaves exactly as before.
+
 `results/runs/` and `results/logs/` are machine-written and gitignored. Three **curated
 sample runs** — one per device, raw samples + statistics + metadata + plot — are committed
 under [`results/samples/`](results/samples):
