@@ -1,0 +1,10 @@
+global:
+  # Matches the default --interval of the monitor loop; scraping faster only
+  # resamples gauges that have not changed.
+  scrape_interval: 15s
+
+scrape_configs:
+  - job_name: ammeters
+    static_configs:
+      # The application runs on the host, not in this network.
+      - targets: ["host.docker.internal:8000"]

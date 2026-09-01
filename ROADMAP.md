@@ -1,6 +1,6 @@
 # Roadmap
 
-What shipped, and what was consciously left out. Last updated: 2026-08-23.
+What shipped, and what was consciously left out. Last updated: 2026-09-01.
 
 Milestones 1–5 are the five sections of the assignment's Problem Statement, in its order and
 under its names. Milestone 0 (fixing the supplied code) and Milestone 6 (documentation) are
@@ -180,6 +180,30 @@ require all three devices to read a common reference current — see
       Linux on every pull request, so the code is exercised there; a hands-on `python main.py`
       run on macOS or Linux has not been done
 
+## ✅ Milestone 7 — Observability (bonus)
+
+*Goal: an optional monitoring mode that exports metrics to Prometheus and visualises them
+in Grafana, without changing what a plain run does.*
+
+- [x] `python main.py` unchanged — same output, same archiving, and it runs with
+      `prometheus-client` absent; the import happens inside the monitor path only
+- [x] `python main.py --monitor` samples every configured device on a loop and serves
+      `/metrics` on port 8000
+- [x] `--interval SECONDS` (default 15), scheduled against absolute ticks on a monotonic
+      clock rather than a fixed sleep after each cycle, so cycle duration cannot make the
+      schedule drift; an overrunning cycle skips to the next tick
+- [x] Six series labelled by ammeter type — mean, standard deviation, min, max, sample
+      count, error counter — all Prometheus code confined to `src/observability/metrics.py`
+- [x] `docker-compose.yml` brings up Prometheus and Grafana only; the application stays on
+      the host and is scraped over `host.docker.internal`
+- [x] Grafana datasource and one dashboard provisioned from committed files, verified end
+      to end: target `up`, all three devices scraped, dashboard present
+- [ ] ⏸ **Deferred** — monitor mode does not archive its cycles. At one cycle every 15 s
+      the JSON and PNG per device would grow without bound, so Prometheus holds the history
+      instead; the cost is that a monitored cycle cannot be replayed from `--show`
+
+---
+
 ---
 
 ## Future Improvements
@@ -187,23 +211,21 @@ require all three devices to read a common reference current — see
 Work that is out of scope for the assignment and was never started. It is recorded here so
 the milestones above describe the delivered solution rather than an open-ended wish list.
 
-### Observability stack
+### Observability stack — delivered, see Milestone 7
 
-Runs are short-lived batch jobs, so a completed run would push metrics to a Prometheus
-**Pushgateway**; Prometheus scrapes it and Grafana reads from Prometheus, with the whole
-stack coming up from a committed `docker-compose.yml`. It would stay optional at runtime —
-the framework must always produce results with the stack down. **None of this is
-implemented and no metrics are exported.**
+The design sketched here was Pushgateway-based, because a run is a short-lived batch job
+with nothing left to scrape once it exits. What shipped drops the Pushgateway: `--monitor`
+makes the process long-lived, so Prometheus scrapes it directly and the extra component
+earns nothing. The items below are the parts of that sketch still not built.
 
-- `docker-compose.yml`, scrape config and an auto-provisioned Grafana datasource
-- One shared registry behind the client, so every device is instrumented identically — call
-  counter, error counter by failure kind, latency histogram, all labelled by ammeter type
-- Requested vs achieved sampling rate, per-run success/failure counts, run duration and
-  timing drift pushed at the end of each run
-- The five statistics as labelled gauges, with a provisioned dashboard panel for each
-- Run ID carried as a label, grouping keys chosen so a new run cannot overwrite the previous
-  one, label cardinality documented
-- A cross-device dashboard on shared normalised axes, with a side-by-side precision panel
+- Latency histogram and call counter behind the client, so every device is instrumented at
+  the transport layer rather than at the statistics
+- Requested vs achieved sampling rate, and timing drift, exported per cycle
+- Run ID carried as a label — rejected for now as unbounded cardinality; the archive under
+  `results/runs/` is where a specific run is looked up
+- A cross-device dashboard on shared normalised axes, with a side-by-side precision panel.
+  The shipped dashboard uses a logarithmic axis instead, which keeps all three legible
+  without inventing a normalisation
 
 ### True accuracy assessment
 

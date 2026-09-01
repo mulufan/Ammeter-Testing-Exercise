@@ -1,0 +1,38 @@
+# Prometheus and Grafana only. The Python application stays on the host, where
+# it can bind the emulator sockets and be run and debugged normally; these two
+# containers just scrape and draw what it exports on port 8000.
+#
+#   docker compose up -d
+#   python main.py --monitor
+#
+# Grafana: http://localhost:3000 (anonymous, no login)
+# Prometheus: http://localhost:9090
+
+services:
+  prometheus:
+    image: prom/prometheus:v2.53.0
+    container_name: ammeter-prometheus
+    ports:
+      - "9090:9090"
+    volumes:
+      - ./monitoring/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+    # Reachable as host.docker.internal on Docker Desktop; this mapping adds the
+    # same name on Linux, where it is not built in.
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+
+  grafana:
+    image: grafana/grafana:11.1.0
+    container_name: ammeter-grafana
+    ports:
+      - "3000:3000"
+    environment:
+      # A local demo stack: no login, straight to the dashboard.
+      GF_AUTH_ANONYMOUS_ENABLED: "true"
+      GF_AUTH_ANONYMOUS_ORG_ROLE: Admin
+      GF_AUTH_DISABLE_LOGIN_FORM: "true"
+    volumes:
+      - ./monitoring/grafana/provisioning:/etc/grafana/provisioning:ro
+      - ./monitoring/grafana/dashboards:/var/lib/grafana/dashboards:ro
+    depends_on:
+      - prometheus

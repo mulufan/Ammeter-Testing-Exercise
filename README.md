@@ -6,7 +6,7 @@ reading in amperes. The framework talks to all three through a single API, sampl
 a configurable schedule, computes statistics over the samples, archives every run under a
 unique ID, plots the measurement series, and ranks the devices by relative variability.
 
-Standard library throughout, apart from `pyyaml` (config) and `matplotlib` (the plot).
+Standard library throughout, apart from `pyyaml` (config), `matplotlib` (the plot) and `prometheus-client` (the optional monitor mode).
 
 ---
 
@@ -51,6 +51,9 @@ greenlee   5           0.0447466    0.0432712   96.70
 Real output from a run on 2026-08-23, elided where it repeats. The startup lines arrive in
 whatever order the three threads bind, the readings are random by design, and the plot path
 is absolute.
+
+For continuous monitoring with Prometheus and Grafana instead of a single run, see
+[Continuous monitoring](#continuous-monitoring).
 
 Using the framework directly:
 
@@ -206,6 +209,62 @@ and the assignment PDF.
 
 ---
 
+## Continuous monitoring
+
+`--monitor` turns the one-shot run into a loop: the same test runs against every configured
+device on a fixed interval, and the resulting statistics are exported as Prometheus metrics
+on `http://localhost:8000/metrics`. [`MONITORING.md`](MONITORING.md) explains the moving
+parts — what each file does, how Grafana loads the dashboard by itself, and diagrams of the
+whole path from the loop to the graph.
+
+```sh
+docker compose up -d          # Prometheus on :9090, Grafana on :3000
+python main.py --monitor      # default interval: 15 s
+python main.py --monitor --interval 30
+```
+
+The application stays **outside Docker** — it binds the emulator sockets on the host and is
+run and debugged normally. The two containers only scrape and draw what it exports, reaching
+the host as `host.docker.internal`. Grafana comes up with the datasource and the *Ammeter
+Monitoring* dashboard already provisioned, anonymous access, no login.
+
+Six series, all labelled by `ammeter`:
+
+| Metric | Type | Meaning |
+| --- | --- | --- |
+| `ammeter_current_amperes` | gauge | Mean current of the latest cycle |
+| `ammeter_current_stddev_amperes` | gauge | Sample standard deviation |
+| `ammeter_current_min_amperes` | gauge | Lowest reading |
+| `ammeter_current_max_amperes` | gauge | Highest reading |
+| `ammeter_sample_count` | gauge | Samples collected |
+| `ammeter_errors_total` | counter | Cycles that failed for this device |
+
+Notes on the mode:
+
+- **Monitor mode does not archive.** At one cycle every 15 s a JSON and a PNG per device
+  would grow without bound; here Prometheus holds the history instead. A plain
+  `python main.py` archives exactly as it always did.
+- **The interval is a target, not a delay.** Each cycle is scheduled at
+  `start + n × interval` on a monotonic clock, so the cycle's own duration does not push the
+  schedule later and later. A cycle that overruns its slot skips forward to the next tick
+  rather than firing back-to-back to catch up.
+- **`prometheus-client` is imported lazily**, inside the monitor path only, so the default
+  run works with the package absent. All of it lives in
+  [`src/observability/metrics.py`](src/observability/metrics.py).
+- The Grafana panels use a **logarithmic y-axis**: the three devices read about three orders
+  of magnitude apart, and a linear axis flattens two of them onto zero.
+- No Pushgateway, no alerting, no authentication — a scraped long-running process covers
+  the case, and the rest is not needed for a local demo stack.
+
+| Path | Contents |
+| --- | --- |
+| [`docker-compose.yml`](docker-compose.yml) | Prometheus + Grafana only |
+| [`monitoring/prometheus.yml`](monitoring/prometheus.yml) | The one scrape job |
+| `monitoring/grafana/provisioning/` | Datasource and dashboard providers |
+| `monitoring/grafana/dashboards/ammeters.json` | The dashboard |
+
+---
+
 ## Key design decisions
 
 Full reasoning, every bug fixed and every rejected alternative are in
@@ -257,6 +316,7 @@ Quantifying true accuracy would require the emulators to expose a shared referen
 | --- | --- |
 | `pyyaml` | Reads `config/config.yaml` (supplied dependency) |
 | `matplotlib` | The per-run measurement-series plot — the only dependency this project added |
+| `prometheus-client` | The `/metrics` endpoint in monitor mode — imported only by `--monitor` |
 | `pytest`, `pytest-cov` | Test suite and coverage gate (test-only) |
 
 Everything else is standard library: `socket`, `statistics`, `json`, `pathlib`, `logging`,
@@ -288,5 +348,5 @@ Nothing is committed to `master` directly. Branch (`feature/`, `fix/`, `chore/`,
   `main.py` or the framework API above.
 - Emulators have no clean shutdown and no `SO_REUSEADDR`; the process relies on daemon
   threads (ISS-10, ISS-18).
-- Prometheus/Grafana observability is planned in [`ROADMAP.md`](ROADMAP.md) but **not
-  implemented** — no metrics are exported.
+- A plain run still exports no metrics; that is what `--monitor` is for (see
+  [Continuous monitoring](#continuous-monitoring)), and the two modes share no state.

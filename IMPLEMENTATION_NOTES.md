@@ -5,9 +5,12 @@ the way. Organised by the sections of the assignment's Problem Statement, not by
 Individual bugs are catalogued in [`ISSUES.md`](ISSUES.md); this file records what was
 *done* about them and why.
 
-**Dependencies beyond the standard library: `matplotlib`, plus the supplied `pyyaml`.**
+**Dependencies beyond the standard library: `matplotlib` and `prometheus-client`, plus the
+supplied `pyyaml`.**
 `pyyaml` came with the project and loads `config/config.yaml`. `matplotlib` is the only one
 this work added, for the measurement-series plot — see *3. Result Analysis*, "Visualization".
+`prometheus-client` is required only by `--monitor` and is imported inside that path, so a
+plain run works with the package absent — see *Supporting work — observability*.
 Everything else is standard library. `pytest` and `pytest-cov` are development-only, for the
 suite under `tests/` and the CI coverage gate — see *Supporting work — the test suite*.
 
@@ -19,6 +22,7 @@ suite under `tests/` and the CI coverage gate — see *Supporting work — the t
 | 3. Result Analysis | done, incl. the measurement-series plot (bonus) |
 | 4. Result Management | done |
 | 5. Accuracy Assessment (bonus) | precision only — accuracy not delivered, by design |
+| Observability (bonus, beyond the brief) | done — optional `--monitor` mode, Prometheus + Grafana |
 
 ---
 
@@ -732,6 +736,83 @@ hand. That check is what turned up [ISS-25](ISSUES.md#iss-25).
 
 ---
 
+## Supporting work — observability
+
+Not part of the assignment. It exists because "reliable" is asserted by a one-shot run and
+demonstrated by a long-running one: a single `python main.py` shows three numbers at one
+instant, and says nothing about whether a device drifts, stalls or starts failing over an
+hour. `--monitor` is that second view, and it was built so that turning it on changes
+nothing about the first.
+
+### The default run is the constraint
+
+Every decision below follows from one rule: `python main.py` must behave exactly as it did
+before, including on a machine where `prometheus-client` is not installed. So the import
+sits inside `monitor()` rather than at module scope, and all Prometheus code is confined to
+`src/observability/metrics.py` — nothing in `src/testing/` knows metrics exist. The
+alternative, instrumenting the framework or the client directly, would have spread
+`prometheus_client` imports across modules that a default run does load, and made the
+dependency mandatory in practice.
+
+The two modes share `start_emulators()`, extracted from `run_ammeters()`, and nothing else.
+
+### No Pushgateway
+
+The design in `ROADMAP.md` assumed a Pushgateway, for the usual reason: a batch job exits
+before Prometheus can scrape it. Monitor mode removes the premise — the process stays up and
+serves `/metrics` itself, so Prometheus scrapes it directly. Adding a Pushgateway on top
+would introduce a component whose whole purpose is to survive a process that no longer dies,
+and with it the stale-metric problem the Pushgateway is known for.
+
+### Six metrics, not fifteen
+
+Mean, standard deviation, min, max and sample count as gauges, plus an error counter, all
+labelled by ammeter type. These are the five statistics the assignment asks for plus the one
+thing a dashboard cannot derive from them — whether a device answered at all. Latency
+histograms, per-cycle call counters and a run-ID label were considered and left out: run ID
+in particular is unbounded cardinality, and the JSON archive already answers "what did run X
+do" better than a time series can.
+
+The standard deviation is skipped rather than zeroed when it is undefined at one sample,
+matching `AnalysisResult`: publishing 0.0 would read as perfect precision. The error
+counters are touched at startup for every configured device, so their series exist at zero
+and a dashboard panel has something to draw before the first failure.
+
+### A target interval, not a sleep
+
+`time.sleep(interval)` after each cycle makes the true period `interval + cycle_duration`,
+which for a cycle that takes 6 s is a 40% error against a 15 s setting, and drifts further
+the longer it runs. Each cycle is instead scheduled at `start + n × interval` on
+`time.monotonic()`, the same drift-free approach `collect_samples` already uses for
+individual samples. A cycle that overruns its slot recomputes `n` forward to the next future
+tick, rather than firing back-to-back cycles trying to catch up — catching up on a device
+that is already slow is the wrong response.
+
+### The stack stays out of the container
+
+`docker-compose.yml` runs Prometheus and Grafana only. Containerising the application would
+mean publishing three emulator ports out of the container, or moving the emulators inside it
+too, in exchange for nothing: the point of the stack is to watch the program, and the program
+is easier to run and debug on the host. Prometheus reaches back over `host.docker.internal`,
+with an `extra_hosts: host-gateway` mapping so the same file works on Linux, where that name
+is not built in.
+
+Grafana is provisioned from committed files — datasource with a fixed `uid` so the dashboard
+JSON can reference it, and one dashboard with five panels. The panels use a logarithmic
+y-axis: the devices read about three orders of magnitude apart, so on a linear axis ENTES is
+the only visible line. Anonymous access is on and there is no alerting; this is a local demo
+stack, and both were explicitly out of scope.
+
+### Verified
+
+`docker compose up -d` alongside `python main.py --monitor`, then the Prometheus API: the
+`ammeters` target reports `up`, `ammeter_current_amperes` returns all three devices, and
+Grafana's API shows the `prometheus` datasource and the *Ammeter Monitoring* dashboard both
+provisioned. `python main.py` was re-run before and after, unchanged; `pytest` (42 tests) and
+the CI import check both pass with the new module in place.
+
+---
+
 ## Open items
 
 Split by intent. **Queued** items are work still meant to happen; **⏸ deferred** items were
@@ -742,6 +823,10 @@ nobody has got to yet.
 
 **⏸ Deferred.**
 
+- Monitor mode does not archive its cycles, so a reading seen on a Grafana panel cannot be
+  opened with `--show`. At one cycle every 15 s each device would write a JSON and a PNG
+  indefinitely; Prometheus holding the history is the accepted trade, and a plain run
+  archives as it always did.
 - `config_path` is CWD-relative and the config is never validated against a schema
   ([ISS-15](ISSUES.md#iss-15)), so the framework runs from the repo root only. The path fix
   and the missing-file handling were kept together deliberately rather than landing half in
