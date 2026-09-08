@@ -6,6 +6,11 @@
 pyyaml>=6.0
 matplotlib>=3.4.0
 
+# Optional - monitor mode only (`python main.py --monitor`).
+#   prometheus-client - the /metrics endpoint in src/observability/metrics.py.
+#                       A plain run never imports it.
+prometheus-client>=0.20.0
+
 # Not imported anywhere. Left from the supplied file and still to be removed
 # under ISS-21.
 numpy>=1.21.0

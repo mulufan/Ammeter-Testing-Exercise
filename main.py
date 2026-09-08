@@ -1,4 +1,5 @@
 import argparse
+import math
 import threading
 import time
 
@@ -16,6 +17,9 @@ from Ammeters.Circutor_Ammeter import CircutorAmmeter
 from Ammeters.Entes_Ammeter import EntesAmmeter
 from Ammeters.Greenlee_Ammeter import GreenleeAmmeter
 from Ammeters.client import AmmeterError
+
+DEFAULT_INTERVAL_SECONDS = 15.0
+EMULATOR_STARTUP_SECONDS = 5
 
 
 def run_greenlee_emulator():
@@ -50,6 +54,19 @@ def parse_args():
         metavar="TEST_ID",
         nargs="+",
         help="compare archived runs side by side",
+    )
+
+    parser.add_argument(
+        "--monitor",
+        action="store_true",
+        help="run continuously and export Prometheus metrics on /metrics",
+    )
+    parser.add_argument(
+        "--interval",
+        type=float,
+        default=DEFAULT_INTERVAL_SECONDS,
+        metavar="SECONDS",
+        help=f"seconds between monitor cycles (default: {DEFAULT_INTERVAL_SECONDS})",
     )
 
     return parser.parse_args()
@@ -98,21 +115,25 @@ def show_run(test_id):
         )
 
 
-def run_ammeters():
-    """Start the emulators and run a test against every configured device."""
-    # Start each ammeter in a separate thread. As supplied only Greenlee was
-    # started - the other two lines were commented out, so a run reached the
-    # framework with two of the three devices missing and reported them as
-    # connection failures (ISS-25).
+def start_emulators():
+    """Start the three emulator threads and wait for them to bind."""
+    # As supplied only Greenlee was started - the other two lines were commented
+    # out, so a run reached the framework with two of the three devices missing
+    # and reported them as connection failures (ISS-25).
     threading.Thread(target=run_greenlee_emulator, daemon=True).start()
     threading.Thread(target=run_entes_emulator, daemon=True).start()
     threading.Thread(target=run_circutor_emulator, daemon=True).start()
 
     # Wait for the servers to bind before the first measurement. The supplied
     # per-device client calls that used to live here are gone: the framework
-    # below reaches the same devices through the unified API, driven by the
-    # registry in config.yaml.
-    time.sleep(5)
+    # reaches the same devices through the unified API, driven by the registry
+    # in config.yaml.
+    time.sleep(EMULATOR_STARTUP_SECONDS)
+
+
+def run_ammeters():
+    """Start the emulators and run a test against every configured device."""
+    start_emulators()
 
     framework = AmmeterTestFramework()
 
@@ -157,10 +178,76 @@ def run_ammeters():
     print("\nArchived under results/runs - see `python main.py --list`.")
 
 
+def monitor(interval: float):
+    """Sample every device on a fixed interval and export the results to Prometheus.
+
+    Runs are not archived here: at one cycle every few seconds the JSON and PNG
+    per run would grow without bound, and in this mode Prometheus is the store.
+    """
+    if interval <= 0:
+        raise SystemExit("error: --interval must be greater than zero")
+
+    # Imported here so a plain run works without prometheus-client installed.
+    from src.observability import metrics
+
+    start_emulators()
+
+    framework = AmmeterTestFramework()
+    ammeter_types = list(framework.config["ammeters"])
+
+    metrics.start_metrics_server(ammeter_types=ammeter_types)
+    print(
+        f"Serving metrics on http://localhost:{metrics.DEFAULT_METRICS_PORT}/metrics, "
+        f"sampling every {interval:g} s. Ctrl-C to stop."
+    )
+
+    start_time = time.monotonic()
+    cycle = 0
+
+    while True:
+        for ammeter_type in ammeter_types:
+            try:
+                result = framework.run_test(ammeter_type)
+                metrics.record_analysis(result.analysis)
+                print(
+                    f"{ammeter_type:<10} {result.analysis.sample_count} sample(s)  "
+                    f"mean {result.analysis.mean_current:.6g} A"
+                )
+
+            # Same two failure modes as a single run: unreachable or unusable
+            # device, and a device whose samples were all skipped. One bad
+            # device must not end the monitoring loop.
+            except (AmmeterError, ValueError) as exc:
+                metrics.record_error(ammeter_type)
+                print(f"Skipping {ammeter_type}: {exc}")
+
+        # Target absolute ticks rather than sleeping `interval` after each cycle,
+        # so the cycle's own duration does not push the schedule later and later.
+        # A cycle that overruns its slot skips forward to the next future tick
+        # instead of trying to catch up with back-to-back cycles.
+        cycle += 1
+        next_tick = start_time + (cycle * interval)
+        now = time.monotonic()
+
+        if next_tick <= now:
+            cycle = math.ceil((now - start_time) / interval)
+            next_tick = start_time + (cycle * interval)
+
+        time.sleep(next_tick - now)
+
+
 if __name__ == "__main__":
     args = parse_args()
 
-    if not (args.list or args.show or args.compare):
+    if args.monitor:
+        # Ctrl-C is how this mode is meant to end, so it exits quietly rather
+        # than with a KeyboardInterrupt traceback.
+        try:
+            monitor(args.interval)
+        except KeyboardInterrupt:
+            print("\nStopped.")
+
+    elif not (args.list or args.show or args.compare):
         run_ammeters()
     else:
         # The archive options only read files, so they skip the emulator
